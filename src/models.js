@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -14,6 +15,48 @@ export function mat(color, opts = {}) {
 }
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+// --- geometry baking: merge plain-colored meshes into one vertex-colored mesh to cut draw calls
+const bakedMats = {
+  lambert: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+  basic: new THREE.MeshBasicMaterial({ vertexColors: true }),
+};
+function bakeKind(m) {
+  if (!m.isMesh || m.userData.keep || Array.isArray(m.material)) return null;
+  const mt = m.material;
+  if (mt.map || mt.transparent || mt.vertexColors) return null;
+  if (mt.isMeshLambertMaterial && mt.emissive.getHex() === 0) return 'lambert';
+  if (mt.isMeshBasicMaterial) return 'basic';
+  return null;
+}
+export function bake(group, recursive = true) {
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+  const buckets = { lambert: [], basic: [] };
+  const visit = (o) => {
+    for (const ch of [...o.children]) {
+      const kind = bakeKind(ch);
+      if (kind) {
+        let g = ch.geometry.index ? ch.geometry.toNonIndexed() : ch.geometry.clone();
+        for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+        g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, ch.matrixWorld));
+        const c = ch.material.color, n = g.attributes.position.count, col = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        buckets[kind].push(g);
+        ch.parent.remove(ch);
+      } else if (recursive && !ch.isMesh && !ch.userData.keep && !ch.isLight) visit(ch);
+    }
+  };
+  visit(group);
+  for (const kind of ['lambert', 'basic']) {
+    if (!buckets[kind].length) continue;
+    const merged = new THREE.Mesh(mergeGeometries(buckets[kind]), bakedMats[kind]);
+    merged.castShadow = kind === 'lambert'; merged.receiveShadow = true;
+    group.add(merged);
+  }
+  return group;
+}
 export function box(w, h, d, color, x = 0, y = 0, z = 0, opts) {
   const m = new THREE.Mesh(boxGeo, mat(color, opts));
   m.scale.set(w, h, d); m.position.set(x, y, z);
@@ -56,7 +99,7 @@ export function buildCharacter({ skin, shirt, pants, hair, zombie = false, fat =
   const hs = heavy ? 0.46 : 0.42;
   head.add(box(hs, hs, hs, skin, 0, hs / 2, 0));
   const eyeColor = zombie ? (boss ? 0xff2020 : 0xfff04a) : 0x1a1a1a;
-  const eyeOpts = zombie ? { emissive: eyeColor, ei: 0.9 } : undefined;
+  const eyeOpts = zombie ? { basic: true } : undefined;
   head.add(box(0.08, 0.06, 0.02, eyeColor, -0.1, hs * 0.58, hs / 2 + 0.01, eyeOpts));
   head.add(box(0.08, 0.06, 0.02, eyeColor, 0.1, hs * 0.58, hs / 2 + 0.01, eyeOpts));
   if (zombie) {
@@ -91,7 +134,7 @@ export function buildCharacter({ skin, shirt, pants, hair, zombie = false, fat =
     l.add(box(0.25, 0.13, 0.32, zombie ? shade(pants, 0.6) : 0x2a1f16, 0, -0.84, 0.03));
   }
 
-  root.traverse((o) => { if (o.isMesh) o.userData.char = root; });
+  for (const part of [torso, head, armL, armR, legL, legR, helmetMesh]) if (part) bake(part, false);
   return { root, body, hips, torso, neck, head, armL, armR, legL, legR, helmet: helmetMesh };
 }
 
@@ -209,7 +252,7 @@ export function buildStructure(id) {
       break;
     case 'sentry': {
       for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; const l = add(0.08, 0.9, 0.08, 0x333333, Math.cos(a) * 0.35, 0.4, Math.sin(a) * 0.35); l.rotation.set(Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4); }
-      const head = new THREE.Group(); head.position.y = 0.95; g.add(head);
+      const head = new THREE.Group(); head.position.y = 0.95; head.userData.keep = true; g.add(head);
       head.add(box(0.5, 0.35, 0.55, 0x4a5a3a, 0, 0, 0));
       head.add(box(0.07, 0.07, 0.6, 0x222222, 0.1, 0.02, -0.5));
       head.add(box(0.07, 0.07, 0.6, 0x222222, -0.1, 0.02, -0.5));
@@ -217,6 +260,7 @@ export function buildStructure(id) {
       head.add(box(0.1, 0.06, 0.02, 0xff2020, 0, 0.08, -0.28, { emissive: 0xff2020, ei: 1 }));
       const mz = new THREE.Object3D(); mz.position.set(0, 0.02, -0.82); head.add(mz);
       g.userData.head = head; g.userData.muzzle = mz;
+      bake(head, false);
       break;
     }
     case 'tower': {
@@ -231,13 +275,13 @@ export function buildStructure(id) {
       guard.armL.rotation.x = -Math.PI / 2; guard.armR.rotation.x = -Math.PI / 2; guard.armR.rotation.y = 0.35;
       const rifle = buildWeapon('sniper'); rifle.position.set(-0.12, 1.45, 0.3); guard.torso.add(rifle);
       rifle.position.set(0.05, 0.6, 0.45);
-      g.add(guard.root); g.userData.head = guard.root; guard.root.rotation.y = Math.PI;
+      g.add(guard.root); g.userData.head = guard.root; guard.root.rotation.y = Math.PI; guard.root.userData.keep = true;
       const mz = new THREE.Object3D(); mz.position.set(0, 0.64, 1.45); guard.torso.add(mz); g.userData.muzzle = mz;
       break;
     }
   }
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return g;
+  return bake(g);
 }
 
 export function textTexture(lines, { w = 512, h = 128, bg = '#6a1a12', fg = '#ffe9c0', font = '48px "Press Start 2P"', border = '#2a0a06' } = {}) {

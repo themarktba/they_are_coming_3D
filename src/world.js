@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { box, mat, textTexture, buildCharacter } from './models.js';
+import { box, mat, textTexture, buildCharacter, bake } from './models.js';
 import { WORLD } from './config.js';
 
 const PIXEL_MODES = { hd: 0, pixel: 420, retro: 270 };
@@ -10,11 +10,11 @@ export class World {
     this.renderer.setPixelRatio(1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(70, 1, 0.05, 400);
+    this.camera = new THREE.PerspectiveCamera(70, 1, 0.1, 400);
     this.scene.add(this.camera);
     this.pixelMode = 'pixel';
     this.colliders = []; // {minX,maxX,minZ,maxZ}
@@ -29,6 +29,7 @@ export class World {
     this.buildOrphanage();
     this.buildSurroundings();
     this.buildGrid();
+    this.bakeLoose();
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -150,22 +151,28 @@ export class World {
 
   buildGround() {
     const grass = this.groundTexture(0x5d8a3a, 0.35, 64, 40);
-    const asphalt = this.groundTexture(0x55585e, 0.22, 64, 120);
-    const dirt = this.groundTexture(0x7a6040, 0.3, 64, 60);
+    const asphalt = this.groundTexture(0x6a6d73, 0.2, 64, 120);
+    const dirt = this.groundTexture(0x8a7252, 0.28, 64, 60);
     const side = this.groundTexture(0x9a9a92, 0.15, 32, 10);
     this.plane(600, 600, grass, 120, 120, 0, 0, 0);
-    this.plane(18, 170, asphalt, 4, 40, 0, 0.01, -70);
-    this.plane(52, 11, dirt, 12, 3, 0, 0.012, 8);
+    this.plane(18, 157, asphalt, 4, 37, 0, 0.04, -76.5);
+    this.plane(52, 11.5, dirt, 12, 3, 0, 0.04, 7.75);
     for (const sx of [-1, 1]) {
-      this.plane(2.4, 160, side, 1, 60, sx * 10.2, 0.02, -75);
-      const curb = box(0.25, 0.15, 160, 0x8a8a84, sx * 9.05, 0.07, -75); this.scene.add(curb);
+      this.plane(2.4, 157, side, 1, 60, sx * 10.2, 0.06, -76.5);
+      const curb = box(0.25, 0.15, 157, 0x8a8a84, sx * 9.05, 0.07, -76.5); this.scene.add(curb);
     }
-    for (let z = 2; z > -150; z -= 6) this.scene.add(box(0.25, 0.02, 3, 0xe8d64a, 0, 0.025, z));
+    for (let z = -1; z > -150; z -= 6) this.scene.add(box(0.25, 0.04, 3, 0xe8d64a, 0, 0.05, z));
     // blood-stained drag marks and debris for mood
     for (let i = 0; i < 40; i++) {
-      const b = box(0.4 + Math.random() * 1.4, 0.02, 0.4 + Math.random() * 1.2, [0x4a1010, 0x2a2a2a, 0x3a2a1a][i % 3], (Math.random() - 0.5) * 16, 0.03, -10 - Math.random() * 120);
+      const b = box(0.4 + Math.random() * 1.4, 0.02, 0.4 + Math.random() * 1.2, [0x4a1010, 0x2a2a2a, 0x3a2a1a][i % 3], (Math.random() - 0.5) * 16, 0.06, -10 - Math.random() * 120);
       b.rotation.y = Math.random() * 3; b.castShadow = false; this.scene.add(b);
     }
+  }
+
+  bakeLoose() {
+    const g = new THREE.Group();
+    for (const c of [...this.scene.children]) if (c.isMesh && !c.material.map && !c.material.transparent && c.material.isMeshLambertMaterial && c.material.emissive.getHex() === 0) g.add(c);
+    this.scene.add(bake(g));
   }
 
   buildGrid() {
@@ -202,7 +209,7 @@ export class World {
     sign.position.set(0, 7.6, -0.08); sign.rotation.y = Math.PI; g.add(sign);
     // door
     g.add(box(3.2, 4.2, 0.3, trim, 0, 2.1, -0.1));
-    this.door = box(2.6, 3.8, 0.2, 0x5a3418, 0, 1.9, -0.25); g.add(this.door);
+    this.door = box(2.6, 3.8, 0.2, 0x5a3418, 0, 1.9, -0.25); this.door.userData.keep = true; g.add(this.door);
     g.add(box(0.15, 0.15, 0.1, 0xd4af37, 0.9, 1.9, -0.4));
     g.add(box(5, 0.3, 2, 0x8a8a84, 0, 0.15, -1));
     // windows
@@ -220,7 +227,7 @@ export class World {
     }
     for (const [x, y] of kids) { g.add(box(0.35, 0.35, 0.05, 0x10141a, x, y + 0.35, -0.2)); g.add(box(0.5, 0.5, 0.05, 0x10141a, x, y - 0.1, -0.2)); }
     this.colliders.push({ minX: -16.3, maxX: 16.3, minZ: 13.8, maxZ: 26 });
-    this.orphanage = g;
+    this.orphanage = bake(g);
 
     // yard lamps + the administrator's shop stall
     const stall = new THREE.Group(); stall.position.set(-12, 0, 11); this.scene.add(stall);
@@ -230,7 +237,8 @@ export class World {
     for (let i = 0; i < 6; i++) stall.add(box(0.64, 0.12, 1.8, i % 2 ? 0xffffff : 0xc02020, -1.6 + i * 0.64, 2.65, 0.1));
     stall.add(box(0.6, 0.35, 0.3, 0x4a5a3a, -1, 1.35, 0)); stall.add(box(0.9, 0.12, 0.2, 0x2a2a2e, 0.6, 1.25, 0));
     const admin = buildCharacter({ skin: 0xc68c64, shirt: 0x8a8a8a, pants: 0x2d2d2d, hair: 0x3a3a3a });
-    admin.root.position.set(0, 0, 0.9); admin.root.rotation.y = Math.PI; stall.add(admin.root);
+    admin.root.position.set(0, 0, 0.9); admin.root.rotation.y = Math.PI; admin.root.userData.keep = true; stall.add(admin.root);
+    bake(stall);
     this.admin = admin;
     this.colliders.push({ minX: -14, maxX: -10, minZ: 10.1, maxZ: 12.2 });
 
@@ -256,7 +264,7 @@ export class World {
       g.add(box(s, s * 0.8, s, leaf, 0, h + s * 0.3, 0));
       g.add(box(s * 0.6, s * 0.5, s * 0.6, leaf, 0.2, h + s * 0.85, 0.1));
     }
-    this.scene.add(g); return g;
+    this.scene.add(bake(g)); return g;
   }
 
   house(x, z, rotY, burned) {
@@ -274,7 +282,7 @@ export class World {
     }
     g.add(box(1.2, 2.2, 0.1, 0x3a2418, 0, 1.1, d / 2 + 0.03));
     if (burned) for (let i = 0; i < 5; i++) g.add(box(0.3 + Math.random(), 0.3 + Math.random(), 0.3 + Math.random(), 0x222222, (Math.random() - 0.5) * w, 0.3, d / 2 + 1 + Math.random() * 2));
-    this.scene.add(g);
+    this.scene.add(bake(g));
   }
 
   car(x, z, rotY, burned) {
@@ -286,7 +294,7 @@ export class World {
     for (const sx of [-1, 1]) for (const sz of [-1.3, 1.3]) g.add(box(0.3, 0.6, 0.6, 0x111111, sx * 0.95, 0.3, sz));
     if (!burned) { g.add(box(0.3, 0.2, 0.05, 0xfff0c0, 0.6, 0.8, 2.11, { emissive: 0xfff0c0, ei: 0.3 })); g.add(box(0.3, 0.2, 0.05, 0xfff0c0, -0.6, 0.8, 2.11, { emissive: 0xfff0c0, ei: 0.3 })); }
     g.rotation.z = (Math.random() - 0.5) * 0.08;
-    this.scene.add(g); return g;
+    this.scene.add(bake(g)); return g;
   }
 
   lamp(x, z, face) {
@@ -295,7 +303,7 @@ export class World {
     g.add(box(1.4, 0.15, 0.2, 0x3a3a40, face * 0.6, 4.95, 0));
     const bulb = box(0.5, 0.2, 0.35, 0xfff0c0, face * 1.2, 4.82, 0, { emissive: 0xffd890, ei: 0 });
     bulb.material = bulb.material.clone(); g.add(bulb);
-    this.scene.add(g);
+    this.scene.add(bake(g));
     this.lamps.push({ bulb, pos: new THREE.Vector3(x + face * 1.2, 4.7, z) });
   }
 
@@ -338,12 +346,13 @@ export class World {
     this.scene.fog.color.copy(bot);
     this.scene.fog.near = 50 - 25 * k2; this.scene.fog.far = 210 - 90 * k2;
     this.sun.color.copy(lerpC(lerpC(0xfff1d6, 0xff9a50, k1).getHex(), redMoon ? 0xff6050 : 0x8aa0ff, k2));
-    this.sun.intensity = 2.6 - 0.8 * k1 - 1.3 * k2;
+    this.sun.intensity = 3.8 - 1.0 * k1 - 1.9 * k2;
     const ang = 1.05 - 0.4 * k1;
     this.sun.userData.dir = new THREE.Vector3(-0.85, Math.sin(ang) * 1.4 + 0.4 * k2, 0.3).normalize();
-    this.hemi.intensity = 1.25 - 0.25 * k1 - 0.5 * k2;
+    this.hemi.intensity = 2.1 - 0.4 * k1 - 1.1 * k2;
+    this.fill.intensity = 0.9 - 0.3 * k2;
     this.hemi.color.copy(lerpC(0xcfe8ff, redMoon ? 0x6a3040 : 0x4a5a8a, k2));
-    this.renderer.toneMappingExposure = 1.05 + 0.25 * k2;
+    this.renderer.toneMappingExposure = 0.95 + 0.25 * k2;
     const lampOn = t > 0.55 ? 1 : 0;
     for (const l of this.lamps) l.bulb.material.emissiveIntensity = lampOn * (Math.random() < 0.12 ? 0.2 : 1.6);
     for (const w of this.windows) w.material.emissiveIntensity = t > 0.45 ? (Math.random() < 0.7 ? 0.9 : 0.15) : 0;

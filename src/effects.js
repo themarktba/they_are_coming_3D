@@ -99,7 +99,7 @@ export class Effects {
   decal(x, z, size, color, rot = Math.random() * 6) {
     const i = this.decalIdx++ % this.decalMax;
     _q.setFromAxisAngle(UP, rot);
-    _m.compose(_p.set(x, 0.035 + (i % 50) * 0.0004, z), _q, _s.set(size, 1, size * (0.6 + Math.random() * 0.8)));
+    _m.compose(_p.set(x, 0.075 + (i % 50) * 0.0006, z), _q, _s.set(size, 1, size * (0.6 + Math.random() * 0.8)));
     this.decals.setMatrixAt(i, _m);
     this.decals.setColorAt(i, _c.setHex(color));
     this.decals.count = Math.min(this.decalMax, Math.max(this.decals.count, i + 1));
