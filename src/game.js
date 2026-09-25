@@ -73,6 +73,7 @@ export class Game {
   enterMenu() {
     this.state = 'menu';
     this.mode = 'campaign';
+    this.godMode = false;
     this.paused = false;
     this.input.wantLock = false; this.input.unlock();
     this.zombies.clear(); this.structures.clear(); this.effects.clearDecals(); this.effects.clearTexts();
@@ -105,7 +106,7 @@ export class Game {
   continueRun() {
     initAudio();
     const r = this.save.run;
-    if (!r) return;
+    if (!r || r.inWave) return;
     this.diff = DIFFICULTIES[r.diff];
     this.mode = 'campaign';
     this.day = r.day; this.money = r.money; this.orphanageHp = r.orphanageHp; this.stats = r.stats;
@@ -173,7 +174,7 @@ export class Game {
   startDay() {
     if (this.state !== 'build') return;
     initAudio();
-    this.structures.clearGhost(); this.placing = null;
+    this.cancelPlacing();
     this.state = 'wave';
     this.world.grid.visible = false;
     this.selected = null; this.hud.selectStructure(null);
@@ -190,6 +191,7 @@ export class Game {
     this.input.wantLock = true;
     this.input.lock();
     this.world.setTime(this.diff.night ? 1 : 0.42);
+    if (this.mode === 'campaign' && this.save.run) { this.save.run.inWave = true; this.persist(); }
     if (this.mode === 'campaign') { this.hud.banner('THEY ARE COMING!', `Day ${this.day}`, 2.6, 'red'); sfx('siren'); }
     setMusic('combat');
   }
@@ -270,13 +272,14 @@ export class Game {
     this.day++;
     const best = this.save.best[this.diff.id] || 0;
     if (this.day - 1 > best) { this.save.best[this.diff.id] = this.day - 1; }
-    this.persist();
+    this.snapshotRun();
   }
 
   gameOver(reason) {
     if (this.state === 'gameover') return;
     if (this.mode === 'playground') { this.player.spawn(); this.hud.toast('RESPAWNED'); return; }
     this.state = 'gameover';
+    this.goT = 0;
     this.waveActive = false;
     this.input.wantLock = false; this.input.unlock();
     this.save.run = null;
@@ -287,7 +290,7 @@ export class Game {
     this.persist();
     setMusic('off');
     sfx('gameOver');
-    setTimeout(() => this.hud.showGameOver({ reason, day: this.day, survived, kills: this.stats.kills + (this.dayKills || 0), headshots: this.stats.headshots + (this.dayHeadshots || 0), newBest, best: Math.max(best, survived) }), 1800);
+    setTimeout(() => this.hud.showGameOver({ reason, day: this.day, survived, kills: this.stats.kills, headshots: this.stats.headshots, newBest, best: Math.max(best, survived) }), 1800);
   }
 
   // ---------- combat hooks
@@ -304,9 +307,12 @@ export class Game {
   }
 
   onReviverFinished(z) {
-    const reward = Math.round(z.def.$ * this.diff.money);
+    const reward = Math.round(z.def.$ * this.diff.money * 1.5);
     this.dayKills++; this.dayEarn += reward; this.stats.kills++;
-    this.effects.text(z.root.position.clone().setY(1), `+$${reward}`, 'money');
+    this.dayHeadshots++; this.stats.headshots++;
+    this.effects.text(z.root.position.clone().setY(1), `FINISHED +$${reward}`, 'head');
+    sfx('coin');
+    this.hud.onKill(true);
   }
 
   onBossSpawn(z) {
@@ -452,6 +458,7 @@ export class Game {
     } else if (kind === 'structure') {
       const s = STRUCTURES[id];
       if (!this.canAfford(s.price)) return this.deny();
+      this.cancelPlacing();
       this.placing = { id, left: s.count || 1, paid: false };
       this.structures.setGhost(id);
       this.hud.placingHint(true);
@@ -475,7 +482,8 @@ export class Game {
 
   cancelPlacing() {
     if (!this.placing) return;
-    // a claymore pack that was partially placed is already paid for
+    const pl = this.placing, def = STRUCTURES[pl.id];
+    if (pl.paid && pl.left > 0 && this.mode !== 'playground') this.money += Math.floor(def.price * pl.left / (def.count || 1));
     this.placing = null; this.structures.clearGhost(); this.hud.placingHint(false);
   }
 
@@ -498,7 +506,7 @@ export class Game {
 
   sellSelected() {
     const s = this.selected;
-    if (!s) return;
+    if (!s || s.dead) { this.selected = null; this.hud.selectStructure(null); return; }
     const refund = this.structures.sell(s);
     if (this.mode !== 'playground') this.money += refund;
     this.selected = null;
@@ -516,7 +524,7 @@ export class Game {
     if (this.state !== 'wave') return;
     this.paused = p;
     this.hud.showPause(p);
-    if (!p) this.input.lock();
+    if (p) this.input.unlock(); else this.input.lock();
   }
 
   groundPoint() {
@@ -592,12 +600,13 @@ export class Game {
 
     if (this.state === 'menu') this.updateMenu(dt);
     else if (this.state === 'build') this.updateBuild(dt);
+    else if (this.state === 'gameover' && (this.goT = (this.goT || 0) + dt) > 3) { this.player.updateCamera(dt); this.world.update(dt, this.player.pos, null); }
     else if (this.paused || (this.state === 'wave' && !inp.locked && !this.debugNoLock && this.player.alive)) { /* frozen until the pointer is captured */ }
     else {
       if (this.hitStopT > 0) { this.hitStopT -= dt; dt *= 0.08; }
       if (this.slowmoT > 0) { this.slowmoT -= dt; dt *= 0.3; }
       const active = this.state === 'wave' && (inp.locked || this.debugNoLock);
-      if (this.state === 'wave' && this.mode === 'playground') this.playgroundKeys();
+      if (this.state === 'wave' && this.mode === 'playground') { this.playgroundKeys(); if (this.state !== 'wave') { this.hud.update(dt); return; } }
       this.player.update(dt, inp, active);
       if (this.state === 'wave') this.updateDirector(dt);
       this.zombies.update(dt);

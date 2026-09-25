@@ -113,7 +113,7 @@ export class Player {
   forward(out = _v) { return out.set(0, 0, -1).applyQuaternion(this.camera.quaternion); }
 
   damage(amount) {
-    if (!this.alive || this.game.godMode) return;
+    if (!this.alive || (this.game.mode === 'playground' && this.game.godMode)) return;
     const d = amount * (1 - this.armorReduce);
     this.hp -= d;
     this.regenDelay = 4;
@@ -249,7 +249,7 @@ export class Player {
         this.cd = 1 / w.rate;
         this.swingT = 1;
         sfx(this.current === 'saber' ? 'saber' : 'swing');
-        setTimeout(() => { if (this.alive && this.weapon === w) this.meleeHit(w, w.dmg, false); }, 110);
+        setTimeout(() => { if (this.alive && this.weapon === w && g.state === 'wave' && !g.paused) this.meleeHit(w, w.dmg, false); }, 110);
       }
     }
   }
@@ -335,6 +335,7 @@ export class Player {
     const g = this.game;
     const fwd = _v.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).clone();
     setTimeout(() => {
+      if (g.state !== 'wave' || g.paused) return;
       let hit = false;
       for (const z of [...g.zombies.list]) {
         if (!z.alive) continue;

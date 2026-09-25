@@ -62,7 +62,10 @@ export class Hud {
     click('btn-resume', () => g.pause(false));
     click('btn-p-settings', () => this.overlay('settings'));
     click('btn-p-help', () => this.overlay('help'));
-    click('btn-quit', () => { g.paused = false; g.enterMenu(); });
+    click('btn-quit', () => {
+      if (g.mode === 'campaign' && !confirm('Abandon the fight? Quitting mid-day forfeits this run.')) return;
+      g.paused = false; g.enterMenu();
+    });
 
     // settings
     document.querySelectorAll('.seg').forEach((seg) => {
@@ -103,7 +106,9 @@ export class Hud {
     this.stack = [];
     for (const s of SCREENS) $('scr-' + s).classList.toggle('show', s === name);
     if (name === 'menu') {
-      const r = this.game.save.run;
+      const g = this.game;
+      if (g.save.run && g.save.run.inWave) { g.save.run = null; g.persist(); }
+      const r = g.save.run;
       $('btn-continue').style.display = r ? '' : 'none';
       if (r) $('btn-continue').textContent = `CONTINUE · DAY ${r.day} · ${DIFFICULTIES[r.diff].name}`;
     }

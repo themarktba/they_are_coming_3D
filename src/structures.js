@@ -64,7 +64,7 @@ export class StructureManager {
   destroy(s) {
     s.dead = true;
     this.scene.remove(s.obj); this.scene.remove(s.bar);
-    this.list.splice(this.list.indexOf(s), 1);
+    const i = this.list.indexOf(s); if (i >= 0) this.list.splice(i, 1);
     this.game.effects.splinters(new THREE.Vector3(s.x, s.def.h * 0.5, s.z), CHIP[s.id], 18);
     this.game.effects.dust(new THREE.Vector3(s.x, 0.3, s.z), 14);
     if (s.id !== 'claymore') { sfx('break'); this.game.onStructureDestroyed(s); }
@@ -86,7 +86,7 @@ export class StructureManager {
 
   destroyQuiet(s) {
     s.dead = true; this.scene.remove(s.obj); this.scene.remove(s.bar);
-    this.list.splice(this.list.indexOf(s), 1);
+    const i = this.list.indexOf(s); if (i >= 0) this.list.splice(i, 1);
   }
 
   at(x, z) {

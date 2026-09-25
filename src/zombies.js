@@ -167,7 +167,7 @@ export class ZombieManager {
 
     if (z.def.explode) {
       const e = z.def.explode;
-      setTimeout(() => g.explode(z.root.position.clone(), e.radius, e.dmg * (g.scaling?.dmg ?? 1), { fromZombie: true, color: 0x9ab020 }), 60);
+      setTimeout(() => g.state === 'wave' && g.explode(z.root.position.clone(), e.radius, e.dmg * (g.scaling?.dmg ?? 1), { fromZombie: true, color: 0x9ab020 }), 60);
       z.root.visible = false;
       z.state = 'dead';
       for (let i = 0; i < 30; i++) g.effects.blood(hp, null, 2, 0x8a9a20);
@@ -258,7 +258,7 @@ export class ZombieManager {
 
       z.slow = 1;
       // traps affect
-      for (const s of g.structures.list) {
+      for (const s of [...g.structures.list]) {
         if (s.def.type !== 'trap' || s.dead) continue;
         if (p.x > s.minX - z.radius && p.x < s.maxX + z.radius && p.z > s.minZ - z.radius && p.z < s.maxZ + z.radius) {
           if (s.id === 'claymore') continue;
@@ -359,7 +359,7 @@ export class ZombieManager {
     const g = this.game;
     z.bossT -= dt;
     z.summonT = (z.summonT ?? 7) - dt;
-    if (z.summonT <= 0) {
+    if (z.summonT <= 0 && g.state === 'wave' && this.aliveCount < 70) {
       z.summonT = 12 + Math.random() * 4;
       sfx('bossRoar');
       g.shake(0.4);
@@ -407,6 +407,7 @@ export class ZombieManager {
     if (z.reviveT <= 0) {
       z.state = 'walk';
       z.revived = true;
+      z.hp = Math.max(z.hp, z.maxHp * 0.3);
       z.root.quaternion.setFromAxisAngle(UP, z.yaw);
       z.rig.body.rotation.set(0, 0, 0);
       z.root.position.y = 0;
