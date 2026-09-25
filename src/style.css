@@ -34,7 +34,9 @@ button { font-family: var(--px); }
 .badge { position: absolute; right: -8px; top: -10px; transform: rotate(12deg); background: var(--yellow); color: var(--ink); font-family: var(--px); font-size: clamp(14px, 2.4vw, 26px); padding: 8px 12px; box-shadow: 4px 4px 0 var(--ink); }
 .tagline { font-size: 26px; color: #d8c8a8; margin-top: 18px; text-shadow: 2px 2px 0 #000; }
 .menu-buttons { display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 300px; }
-.menu-foot { position: absolute; bottom: 14px; font-size: 18px; opacity: 0.6; }
+.menu-foot { position: absolute; bottom: 14px; font-size: 18px; opacity: 0.6; text-align: center; }
+.touch-note { display: none; }
+@media (pointer: coarse) { .touch-note { display: inline; } }
 @keyframes throb { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04) rotate(-1deg); } }
 @keyframes blink { 50% { opacity: 0; } }
 

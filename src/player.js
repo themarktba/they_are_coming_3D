@@ -116,6 +116,7 @@ export class Player {
     if (!this.alive || this.game.godMode) return;
     const d = amount * (1 - this.armorReduce);
     this.hp -= d;
+    this.regenDelay = 4;
     this.game.world.hurt = Math.min(1.2, this.game.world.hurt + 0.25 + d / 40);
     this.game.shake(0.25);
     sfx('hurt');
@@ -127,7 +128,6 @@ export class Player {
   die() {
     this.alive = false;
     this.deathT = 0;
-    this.view = this.view; // keep; camera switches to orbit in update
     this.game.onPlayerDied();
   }
 
@@ -175,6 +175,9 @@ export class Player {
     const hspeed = Math.hypot(this.vel.x, this.vel.z);
     this.bob += dt * hspeed * 1.6;
     if (hspeed > 1 && this.grounded()) sfx('step');
+
+    this.regenDelay = (this.regenDelay || 0) - dt;
+    if (this.regenDelay <= 0 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
 
     // weapon actions
     this.cd -= dt; this.kickT -= dt; this.swapAnim = Math.max(0, (this.swapAnim || 0) - dt * 4);

@@ -153,6 +153,7 @@ export class Game {
     this.state = 'build';
     this.paused = false;
     this.waveActive = false;
+    this.boss = null;
     this.input.wantLock = false; this.input.unlock();
     this.zombies.clear();
     this.effects.clearTexts();
@@ -195,7 +196,7 @@ export class Game {
 
   buildWave(n) {
     const day = this.day;
-    const count = Math.round((5 + day * 2.4 + n * 2) * this.diff.zCount);
+    const count = Math.round((4 + day * 2.1 + n * 1.5) * this.diff.zCount);
     const weights = { walker: 1, runner: 0.4, helmet: 0.32, crawler: 0.22, riser: 0.28, bloater: 0.16, brute: 0.07 + Math.min(0.12, day * 0.006) };
     const pool = Object.entries(weights).filter(([t]) => zombieUnlocked(t, day));
     const total = pool.reduce((a, [, w]) => a + w, 0);
@@ -257,7 +258,7 @@ export class Game {
     this.state = 'dayclear';
     this.waveActive = false;
     this.input.wantLock = false; this.input.unlock();
-    const bonus = Math.round((80 + this.day * 30) * this.diff.money);
+    const bonus = Math.round((100 + this.day * 45) * this.diff.money);
     const integrity = this.orphanageHp / ORPHANAGE_HP;
     const intactBonus = Math.round(bonus * 0.5 * integrity);
     const total = this.dayEarn + bonus + intactBonus;
@@ -345,7 +346,7 @@ export class Game {
   damageOrphanage(dmg) {
     if (this.state !== 'wave') return;
     if (this.mode === 'playground' && this.godMode) return;
-    this.orphanageHp = Math.max(0, this.orphanageHp - dmg);
+    this.orphanageHp = Math.max(0, this.orphanageHp - dmg * 0.7);
     this.hud.orphanageHit();
     sfx('wood');
     this.world.door.position.x = (Math.random() - 0.5) * 0.08;
@@ -468,7 +469,7 @@ export class Game {
     this.hud.refreshShop();
   }
 
-  orphanageRepairCost() { return Math.ceil((ORPHANAGE_HP - this.orphanageHp) * 0.8); }
+  orphanageRepairCost() { return Math.ceil((ORPHANAGE_HP - this.orphanageHp) * 0.5); }
 
   deny() { sfx('deny'); this.hud.toast('NOT ENOUGH MONEY', 'bad'); }
 
@@ -578,7 +579,12 @@ export class Game {
     this.last = t;
     this.fpsAcc += dt; this.fpsFrames++;
     if (this.fpsAcc > 0.5) { this.fps = Math.round(this.fpsFrames / this.fpsAcc); this.fpsAcc = 0; this.fpsFrames = 0; }
+    this.step(dt);
+    this.world.render();
+    this.input.endFrame();
+  }
 
+  step(dt) {
     const inp = this.input;
     if (inp.hit('KeyV') && (this.state === 'wave')) { this.player.setView(this.player.view === 'fps' ? 'tps' : 'fps'); this.save.settings.view = this.player.view; this.persist(); }
     if (inp.hit('KeyM')) { this.save.settings.muted = !this.save.settings.muted; setMuted(this.save.settings.muted); this.persist(); this.hud.toast(this.save.settings.muted ? 'SOUND OFF' : 'SOUND ON'); }
@@ -601,8 +607,6 @@ export class Game {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.5);
     this.effects.update(this.paused ? 0 : dt);
     this.hud.update(dt);
-    this.world.render();
-    inp.endFrame();
   }
 
   playgroundKeys() {

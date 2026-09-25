@@ -62,7 +62,7 @@ export class Hud {
     click('btn-resume', () => g.pause(false));
     click('btn-p-settings', () => this.overlay('settings'));
     click('btn-p-help', () => this.overlay('help'));
-    click('btn-quit', () => { g.paused = false; if (g.mode === 'campaign' && g.save.run) g.enterMenu(); else g.enterMenu(); });
+    click('btn-quit', () => { g.paused = false; g.enterMenu(); });
 
     // settings
     document.querySelectorAll('.seg').forEach((seg) => {
@@ -80,9 +80,10 @@ export class Hud {
     });
     $('sens').addEventListener('input', (e) => { g.save.settings.sens = parseFloat(e.target.value); g.persist(); g.applySettings(); this.syncSettings(); });
 
-    $('scr-wave').addEventListener('click', () => {});
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.stack.length) { this.back(); }
+      if (e.code !== 'Escape') return;
+      if (this.stack.length) this.back();
+      else if ($('scr-diff').classList.contains('show')) this.show('menu');
     });
   }
 

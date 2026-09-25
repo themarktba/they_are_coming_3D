@@ -14,7 +14,7 @@ export const DIFFICULTIES = {
   normal: {
     id: 'normal', name: 'VETERAN', color: '#ffc93c',
     desc: 'The real apocalypse. Every bullet counts.',
-    zHp: 1, zCount: 1, zSpeed: 1, zDmg: 1, money: 1, startMoney: 250, night: false,
+    zHp: 1, zCount: 1, zSpeed: 1, zDmg: 1, money: 1, startMoney: 300, night: false,
   },
   hard: {
     id: 'hard', name: 'NIGHTMARE', color: '#ff3b3b',
@@ -25,7 +25,7 @@ export const DIFFICULTIES = {
 
 // kind: gun | melee | throw
 export const WEAPONS = {
-  pistol:   { kind: 'gun', name: 'Pistol', price: 0, day: 1, dmg: 4, rate: 4, auto: false, mag: 12, reload: 1.1, spread: 0.012, pellets: 1, pierce: 0, range: 70, shake: 0.08, sound: 'pistol', slot: 1, model: 'pistol', desc: 'Old reliable. Unlimited ammo, limited patience.' },
+  pistol:   { kind: 'gun', name: 'Pistol', price: 0, day: 1, dmg: 5.5, rate: 4, auto: false, mag: 12, reload: 1.1, spread: 0.012, pellets: 1, pierce: 0, range: 70, shake: 0.08, sound: 'pistol', slot: 1, model: 'pistol', desc: 'Old reliable. Unlimited ammo, limited patience.' },
   revolver: { kind: 'gun', name: 'Revolver', price: 300, day: 1, dmg: 13, rate: 2, auto: false, mag: 6, reload: 1.9, spread: 0.006, pellets: 1, pierce: 1, range: 80, shake: 0.2, sound: 'revolver', slot: 1, model: 'revolver', desc: 'Six shots. Punches through one zombie.' },
   shotgun:  { kind: 'gun', name: 'Shotgun', price: 600, day: 2, dmg: 4.5, rate: 1.3, auto: false, mag: 6, reload: 2.3, spread: 0.085, pellets: 8, pierce: 0, range: 28, shake: 0.35, sound: 'shotgun', slot: 2, model: 'shotgun', knock: 3, desc: 'Close range crowd shredder.' },
   rifle:    { kind: 'gun', name: 'Rifle', price: 800, day: 3, dmg: 20, rate: 1.5, auto: false, mag: 5, reload: 2.0, spread: 0.003, pellets: 1, pierce: 2, range: 110, shake: 0.25, sound: 'rifle', slot: 2, model: 'rifle', desc: 'Bolt action. Pierces two targets.' },
@@ -68,19 +68,19 @@ export const STRUCTURES = {
 };
 
 export const ZOMBIES = {
-  walker:  { name: 'Walker', hp: 22, speed: 1.55, dmg: 9, rate: 1, $: 5, scale: 1, skin: [0x7da05a, 0x8bab62, 0x6f9450], shirt: [0x5b6e8c, 0x8c5b5b, 0x6e6e6e, 0x8c7a4f, 0x4f7a5b] },
-  runner:  { name: 'Runner', hp: 15, speed: 4.1, dmg: 7, rate: 1.6, $: 7, scale: 0.95, skin: [0xa3b27a, 0x9aa870], shirt: [0xb03a2e, 0x2e6fb0, 0xd4d4d4] },
-  helmet:  { name: 'Helmet Zombie', hp: 30, speed: 1.45, dmg: 10, rate: 1, $: 10, scale: 1, helmet: 45, skin: [0x7da05a, 0x6f9450], shirt: [0x3d5230, 0x4a5a3a] },
-  riser:   { name: 'Reviver', hp: 24, speed: 1.6, dmg: 10, rate: 1, $: 10, scale: 1, revive: true, skin: [0x6c8f9e, 0x7a9aa8], shirt: [0x2a2a2a, 0x3b2a4a] },
-  crawler: { name: 'Crawler', hp: 12, speed: 1.2, dmg: 6, rate: 1.4, $: 6, scale: 1, crawl: true, skin: [0x8c7a5a, 0x7d6c4f], shirt: [0x5a4a3a] },
-  bloater: { name: 'Bloater', hp: 50, speed: 1.05, dmg: 12, rate: 0.8, $: 15, scale: 1.35, fat: true, explode: { dmg: 45, radius: 4.5 }, skin: [0xa8b84a, 0xb5c255], shirt: [0xd6d0b8] },
-  brute:   { name: 'Brute', hp: 240, speed: 1.25, dmg: 32, rate: 0.7, $: 40, scale: 1.75, heavy: true, skin: [0x6b7f4a, 0x5f7342], shirt: [0x3a3a3a, 0x4a2a2a] },
-  boss:    { name: 'THE ABOMINATION', hp: 2600, speed: 1.1, dmg: 55, rate: 0.6, $: 600, scale: 3.4, heavy: true, boss: true, skin: [0x8f4a5a], shirt: [0x3a1a1a] },
+  walker:  { name: 'Walker', hp: 22, speed: 1.55, dmg: 9, rate: 1, $: 8, scale: 1, skin: [0x7da05a, 0x8bab62, 0x6f9450], shirt: [0x5b6e8c, 0x8c5b5b, 0x6e6e6e, 0x8c7a4f, 0x4f7a5b] },
+  runner:  { name: 'Runner', hp: 15, speed: 4.1, dmg: 7, rate: 1.6, $: 10, scale: 0.95, skin: [0xa3b27a, 0x9aa870], shirt: [0xb03a2e, 0x2e6fb0, 0xd4d4d4] },
+  helmet:  { name: 'Helmet Zombie', hp: 30, speed: 1.45, dmg: 10, rate: 1, $: 14, scale: 1, helmet: 45, skin: [0x7da05a, 0x6f9450], shirt: [0x3d5230, 0x4a5a3a] },
+  riser:   { name: 'Reviver', hp: 24, speed: 1.6, dmg: 10, rate: 1, $: 14, scale: 1, revive: true, skin: [0x6c8f9e, 0x7a9aa8], shirt: [0x2a2a2a, 0x3b2a4a] },
+  crawler: { name: 'Crawler', hp: 12, speed: 1.2, dmg: 6, rate: 1.4, $: 8, scale: 1, crawl: true, skin: [0x8c7a5a, 0x7d6c4f], shirt: [0x5a4a3a] },
+  bloater: { name: 'Bloater', hp: 50, speed: 1.05, dmg: 12, rate: 0.8, $: 20, scale: 1.35, fat: true, explode: { dmg: 45, radius: 4.5 }, skin: [0xa8b84a, 0xb5c255], shirt: [0xd6d0b8] },
+  brute:   { name: 'Brute', hp: 240, speed: 1.25, dmg: 32, rate: 0.7, $: 60, scale: 1.75, heavy: true, skin: [0x6b7f4a, 0x5f7342], shirt: [0x3a3a3a, 0x4a2a2a] },
+  boss:    { name: 'THE ABOMINATION', hp: 1800, speed: 1.1, dmg: 42, rate: 0.6, $: 900, scale: 3.4, heavy: true, boss: true, skin: [0x8f4a5a], shirt: [0x3a1a1a] },
 };
 
 export function zombieUnlocked(type, day) {
-  return day >= ({ walker: 1, runner: 2, helmet: 3, crawler: 3, riser: 4, bloater: 5, brute: 6 })[type];
+  return day >= ({ walker: 1, crawler: 2, runner: 3, helmet: 3, riser: 4, bloater: 5, brute: 6 })[type];
 }
 
-export const ORPHANAGE_HP = 1000;
+export const ORPHANAGE_HP = 2000;
 export const PLAYER_HP = 100;

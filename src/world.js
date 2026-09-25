@@ -197,12 +197,10 @@ export class World {
     g.add(box(32.6, 0.4, 11.6, trim, 0, 9.1, 5.5));
     g.add(box(32.4, 0.5, 11.4, 0x6a6a6a, 0, 0.25, 5.5));
     // roof
-    const roofGeo = new THREE.CylinderGeometry(0.01, 7.4, 4.5, 4, 1);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(33, 0.4, 7.2), mat(0x3a2a2a));
     const r1 = roof.clone(); r1.position.set(0, 10.8, 2.7); r1.rotation.x = 0.55; g.add(r1);
     const r2 = roof.clone(); r2.position.set(0, 10.8, 8.3); r2.rotation.x = -0.55; g.add(r2);
     g.add(box(31.6, 3.2, 0.1, brick, 0, 10.4, 5.5));
-    void roofGeo;
     g.add(box(1.4, 3, 1.4, brick2, 9, 12, 7)); // chimney
     // bell tower / sign
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.6), new THREE.MeshLambertMaterial({ map: textTexture(['ST. MARY ORPHANAGE'], { w: 1024, h: 180, font: '44px "Press Start 2P"' }) }));

@@ -78,7 +78,7 @@ export class ZombieManager {
   }
 
   clear() {
-    for (const z of this.list) this.scene.remove(z.root);
+    for (const z of this.list) { this.scene.remove(z.root); this.clearSlam(z); }
     for (const z of this.corpses) { this.scene.remove(z.root); for (const d of z.detached) this.scene.remove(d.obj); }
     for (const c of this.chunks) this.scene.remove(c.obj);
     this.list = []; this.corpses = []; this.chunks = [];
@@ -172,7 +172,7 @@ export class ZombieManager {
       z.state = 'dead';
       for (let i = 0; i < 30; i++) g.effects.blood(hp, null, 2, 0x8a9a20);
     }
-    if (z.def.boss) g.onBossKilled(z);
+    if (z.def.boss) { this.clearSlam(z); g.onBossKilled(z); }
     if (z.state === 'dead') {
       this.list.splice(this.list.indexOf(z), 1);
       this.corpses.push(z);
@@ -273,7 +273,7 @@ export class ZombieManager {
       if (z.state === 'dead') { i--; continue; }
       if (z.state === 'down') continue;
 
-      const spd = z.speed * z.slow * (p.z < WORLD.minZ ? 2.6 : 1);
+      const spd = z.speed * z.slow * (p.z < WORLD.minZ ? 2.6 : 1) * (z.slamT > 0 ? 0 : 1);
       let mx = dx * spd * dt + sx * dt * 3, mz = dz * spd * dt + sz * dt * 3;
 
       // blocking structures (walls, towers)
@@ -358,31 +358,47 @@ export class ZombieManager {
   bossUpdate(z, dt, dp) {
     const g = this.game;
     z.bossT -= dt;
-    if (z.bossT <= 0) {
-      z.bossT = 9 + Math.random() * 4;
-      if (dp < 9) {
-        z.slamT = 0.6;
-      } else {
-        sfx('bossRoar');
-        g.shake(0.4);
-        const n = 3 + Math.floor(g.day / 5);
-        for (let k = 0; k < n; k++) {
-          const a = Math.random() * Math.PI * 2;
-          g.spawnZombie(Math.random() < 0.3 ? 'runner' : 'walker', z.root.position.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3 - 2)));
-        }
+    z.summonT = (z.summonT ?? 7) - dt;
+    if (z.summonT <= 0) {
+      z.summonT = 12 + Math.random() * 4;
+      sfx('bossRoar');
+      g.shake(0.4);
+      const n = 3 + Math.floor(g.day / 5);
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * Math.PI * 2;
+        g.spawnZombie(Math.random() < 0.3 ? 'runner' : 'walker', z.root.position.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3 - 2)));
       }
+    }
+    if (z.bossT <= 0 && dp < 10 && !(z.slamT > 0)) {
+      z.bossT = 5 + Math.random() * 2.5;
+      z.slamT = 1.1;
+      z.slamC = z.root.position.clone().addScaledVector(new THREE.Vector3(Math.sin(z.yaw), 0, Math.cos(z.yaw)), 2.5);
+      const ring = new THREE.Mesh(new THREE.CircleGeometry(5.5, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2010, transparent: true, opacity: 0.2, depthWrite: false }));
+      ring.position.copy(z.slamC).setY(0.12);
+      this.scene.add(ring);
+      z.slamRing = ring;
+      sfx('groan', { vol: 1 });
     }
     if (z.slamT > 0) {
       z.slamT -= dt;
+      const k = 1 - z.slamT / 1.1;
+      z.slamRing.material.opacity = 0.15 + 0.4 * k * (0.7 + 0.3 * Math.sin(k * 40));
+      z.slamRing.scale.setScalar(0.3 + 0.7 * Math.min(1, k * 1.5));
       if (z.slamT <= 0) {
-        const c = z.root.position.clone().addScaledVector(new THREE.Vector3(Math.sin(z.yaw), 0, Math.cos(z.yaw)), 2.5);
+        this.clearSlam(z);
+        const c = z.slamC;
         g.effects.explosion(c, 3);
         g.effects.dust(c, 20);
         sfx('explosion'); g.shake(0.8);
         if (g.player.pos.distanceTo(c) < 5.5) { g.damagePlayer(z.dmg * 0.8, z); g.player.knock(new THREE.Vector3().subVectors(g.player.pos, c).setY(0).normalize(), 14); }
-        for (const s of g.structures.list) if (!s.dead && Math.hypot(s.x - c.x, s.z - c.z) < 5.5) g.structures.damage(s, z.dmg * 3, z);
+        for (const s of [...g.structures.list]) if (!s.dead && Math.hypot(s.x - c.x, s.z - c.z) < 5.5) g.structures.damage(s, z.dmg * 3, z);
       }
     }
+  }
+
+  clearSlam(z) {
+    if (z.slamRing) { this.scene.remove(z.slamRing); z.slamRing.geometry.dispose(); z.slamRing.material.dispose(); z.slamRing = null; }
+    z.slamT = 0;
   }
 
   updateDown(z, dt) {
@@ -447,6 +463,11 @@ export class ZombieManager {
       if (r.armR.parent) r.armR.rotation.x = -2.4 - s * 0.7;
       r.legL.rotation.x = 0.1 + s * 0.15; r.legR.rotation.x = 0.1 - s * 0.15;
       r.neck.rotation.x = -1.0;
+      return;
+    }
+    if (z.slamT > 0) {
+      r.armL.rotation.x = -2.9; r.armR.rotation.x = -2.9; r.torso.rotation.x = -0.25; r.neck.rotation.x = -0.4;
+      r.legL.rotation.x = 0; r.legR.rotation.x = 0;
       return;
     }
     if (mode === 'stagger') {
