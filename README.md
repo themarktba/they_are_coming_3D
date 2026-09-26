@@ -2,6 +2,8 @@
 
 A 3D, browser-only take on OnHit's *They Are Coming*: defend the orphanage against zombie hordes, day after day. Buy guns, melee weapons, armour, barricades, traps and guard towers between days, then hold the line in first or third person when night falls.
 
+**[Play it in your browser](https://themarktba.github.io/they_are_coming_3D/)**
+
 No backend, no asset downloads: models are generated voxels, and all sound and music is synthesized with WebAudio. Progress is saved in `localStorage`.
 
 ## Play
