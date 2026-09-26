@@ -198,8 +198,8 @@ export class World {
     g.add(box(32.4, 0.5, 11.4, 0x6a6a6a, 0, 0.25, 5.5));
     // roof
     const roof = new THREE.Mesh(new THREE.BoxGeometry(33, 0.4, 7.2), mat(0x3a2a2a));
-    const r1 = roof.clone(); r1.position.set(0, 10.8, 2.7); r1.rotation.x = 0.55; g.add(r1);
-    const r2 = roof.clone(); r2.position.set(0, 10.8, 8.3); r2.rotation.x = -0.55; g.add(r2);
+    const r1 = roof.clone(); r1.position.set(0, 10.8, 2.7); r1.rotation.x = -0.55; g.add(r1);
+    const r2 = roof.clone(); r2.position.set(0, 10.8, 8.3); r2.rotation.x = 0.55; g.add(r2);
     g.add(box(31.6, 3.2, 0.1, brick, 0, 10.4, 5.5));
     g.add(box(1.4, 3, 1.4, brick2, 9, 12, 7)); // chimney
     // bell tower / sign
@@ -271,8 +271,8 @@ export class World {
     const col = burned ? 0x3a3432 : [0xb8a888, 0x8aa0b0, 0xc0b090, 0xa0886a, 0x98a888][Math.floor(Math.random() * 5)];
     g.add(box(w, h, d, col, 0, h / 2, 0));
     const roofCol = burned ? 0x1a1a1a : [0x6a2a1a, 0x3a3a4a, 0x5a3a2a][Math.floor(Math.random() * 3)];
-    const r1 = box(w + 0.6, 0.3, d * 0.6, roofCol, 0, h + 1, -d * 0.24); r1.rotation.x = 0.5; g.add(r1);
-    if (!burned || Math.random() < 0.5) { const r2 = box(w + 0.6, 0.3, d * 0.6, roofCol, 0, h + 1, d * 0.24); r2.rotation.x = -0.5; g.add(r2); }
+    const r1 = box(w + 0.6, 0.3, d * 0.6, roofCol, 0, h + 1, -d * 0.24); r1.rotation.x = -0.5; g.add(r1);
+    if (!burned || Math.random() < 0.5) { const r2 = box(w + 0.6, 0.3, d * 0.6, roofCol, 0, h + 1, d * 0.24); r2.rotation.x = 0.5; g.add(r2); }
     for (let i = 0; i < 3; i++) {
       const wx = -w / 2 + (i + 0.5) * (w / 3);
       g.add(box(1.1, 1.2, 0.1, Math.random() < 0.5 ? 0x0a0a0a : 0x2a3a4a, wx, h * 0.6, d / 2 + 0.03));

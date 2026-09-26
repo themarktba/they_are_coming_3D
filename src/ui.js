@@ -46,7 +46,7 @@ export class Hud {
     const shop = $('shop');
     shop.addEventListener('mouseenter', () => { this.overShop = true; });
     shop.addEventListener('mouseleave', () => { this.overShop = false; });
-    for (const id of ['btn-start', 'btn-repair', 'btn-orph', 'sel-panel', 'btn-build-menu']) {
+    for (const id of ['btn-start', 'btn-repair', 'btn-orph', 'sel-panel', 'btn-build-menu', 'btn-rotate', 'btn-cancel-place']) {
       $(id).addEventListener('mouseenter', () => { this.overShop = true; });
       $(id).addEventListener('mouseleave', () => { this.overShop = false; });
     }
@@ -54,6 +54,9 @@ export class Hud {
     click('btn-repair', () => g.buy('repair'));
     click('btn-orph', () => g.buy('orphanage'));
     click('btn-sell', () => g.sellSelected());
+    click('btn-rotate', () => { if (g.structures.ghost) { g.structures.ghost.rot = (g.structures.ghost.rot + 1) % 2; } });
+    click('btn-cancel-place', () => g.cancelPlacing());
+    g.input.bindTouchUI($('touch-ui'), { onPause: () => g.pause(true) });
     click('btn-build-menu', () => { if (confirm('Quit to main menu? Your run is saved at the start of this day.')) g.enterMenu(); });
 
     click('btn-next', () => g.enterBuild());
@@ -189,6 +192,13 @@ export class Hud {
   orphanageHit() { this.orphFlash = 0.3; }
 
   placingHint(on) {
+    $('btn-rotate').style.display = on ? '' : 'none';
+    $('btn-cancel-place').style.display = on ? '' : 'none';
+    const touch = this.game.input.touchMode;
+    if (touch) {
+      $('build-hint').innerHTML = on ? '<b>TAP</b> the map to place · <b>ROTATE</b> / <b>CANCEL</b> below' : 'Buy defenses and tap to place them. <b>Drag</b> pans, <b>pinch</b> zooms. Tap a structure to sell it.';
+      return;
+    }
     $('build-hint').innerHTML = on
       ? '<b>CLICK</b> place · <b>R</b> rotate · <b>SHIFT</b> keep placing · <b>RIGHT-CLICK</b> cancel'
       : 'Buy defenses and place them on the street. <b>WASD</b> pans the map, the <b>wheel</b> zooms. Click a structure to sell it.';

@@ -173,6 +173,16 @@ export class Effects {
     this.rings.push({ m: ring, t: 0, max: 0.45, r: radius * 1.3 });
   }
 
+  firework(pos) {
+    const cols = [[0xff4040, 0xffa0a0], [0x40ff80, 0xc0ffc0], [0x60a0ff, 0xd0e0ff], [0xffd040, 0xfff0a0], [0xff60ff, 0xffc0ff]];
+    const [c1, c2] = cols[Math.floor(Math.random() * cols.length)];
+    for (let i = 0; i < 70; i++) {
+      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u), sp = 7 + Math.random() * 3;
+      this.glow.spawn({ x: pos.x, y: pos.y, z: pos.z, vx: s * Math.cos(th) * sp, vy: u * sp, vz: s * Math.sin(th) * sp, life: 1.1 + Math.random() * 0.6, size: 0.22, color: i % 3 ? c1 : c2, g: 3, drag: 1.6 });
+    }
+    this.flashLight(pos, c1, 60, 45, 0.5);
+  }
+
   text(pos, str, cls = '') {
     if (!this.textLayer) return;
     if (this.texts.length > 40) { const o = this.texts.shift(); o.el.remove(); }

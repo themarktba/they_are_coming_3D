@@ -126,6 +126,12 @@ export function sfx(name, opts = {}) {
     }
     case 'dayClear': [523, 659, 784, 1046].forEach((f, i) => tone(t + i * 0.12, 0.35, { type: 'square', freq: f, vol: 0.12 })); break;
     case 'gameOver': [392, 330, 262, 196].forEach((f, i) => tone(t + i * 0.3, 0.6, { type: 'sawtooth', freq: f, vol: 0.14 })); break;
+    case 'firework': {
+      if (!throttle('firework', 150)) return;
+      tone(t, 0.5, { type: 'sine', freq: 900, freqEnd: 2400, vol: 0.04, attack: 0.05 });
+      noise(t + 0.5, 0.9, { freq: 1500, freqEnd: 200, vol: 0.5 });
+      break;
+    }
     case 'step': if (!throttle('step', 250)) return; noise(t, 0.05, { freq: 300, vol: 0.12 }); break;
   }
 }

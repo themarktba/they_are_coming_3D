@@ -5,6 +5,10 @@ export class Input {
     this.pressed = new Set();
     this.mouse = { x: 0, y: 0, dx: 0, dy: 0, left: false, right: false, leftPressed: false, rightPressed: false, wheel: 0, nx: 0, ny: 0 };
     this.locked = false;
+    this.touchMode = false;
+    this.touch = { mx: 0, my: 0 };
+    this.pan = { dx: 0, dy: 0, zoom: 0 };
+    this.tapped = false;
     this.sensitivity = 1;
     this.wantLock = false;
 
@@ -33,6 +37,11 @@ export class Input {
     });
     canvas.addEventListener('wheel', (e) => { this.mouse.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('touchstart', () => {
+      if (!this.touchMode) { this.touchMode = true; document.body.classList.add('touch'); this.onTouchMode?.(); }
+    }, { passive: true });
+    window.addEventListener('touchend', () => { this.tapped = true; }, { passive: true });
+    this.bindCanvasTouch(canvas);
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
       if (!this.locked) { this.mouse.left = false; this.mouse.right = false; }
@@ -40,7 +49,74 @@ export class Input {
     });
   }
 
-  lock() { try { const p = this.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* denied */ } }
+  // build-mode gestures on the canvas: one finger pans, two fingers pinch-zoom
+  bindCanvasTouch(canvas) {
+    let last = null, lastDist = 0;
+    const pts = (e) => [...e.touches].map((t) => ({ x: t.clientX, y: t.clientY }));
+    canvas.addEventListener('touchstart', (e) => { const p = pts(e); last = p; if (p.length === 2) lastDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      const p = pts(e);
+      if (p.length === 1 && last && last.length === 1) { this.pan.dx += p[0].x - last[0].x; this.pan.dy += p[0].y - last[0].y; }
+      if (p.length === 2) { const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); if (lastDist) this.pan.zoom += (lastDist - d) * 0.05; lastDist = d; }
+      last = p;
+    }, { passive: true });
+  }
+
+  // wave-mode virtual controls
+  bindTouchUI(root, { onPause }) {
+    const stickZone = root.querySelector('#t-stick-zone'), stick = root.querySelector('#t-stick'), knob = root.querySelector('#t-knob');
+    const R = 60;
+    let stickId = null, sx = 0, sy = 0;
+    stickZone.addEventListener('pointerdown', (e) => {
+      stickId = e.pointerId; sx = e.clientX; sy = e.clientY;
+      stickZone.setPointerCapture(e.pointerId);
+      stick.style.display = 'block'; stick.style.left = sx + 'px'; stick.style.top = sy + 'px'; knob.style.transform = 'translate(-50%,-50%)';
+    });
+    stickZone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== stickId) return;
+      let dx = e.clientX - sx, dy = e.clientY - sy;
+      const l = Math.hypot(dx, dy); if (l > R) { dx *= R / l; dy *= R / l; }
+      this.touch.mx = dx / R; this.touch.my = dy / R;
+      knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      if (Math.hypot(this.touch.mx, this.touch.my) > 0.92 && this.touch.my < -0.5) this.keys.add('ShiftLeft'); else this.keys.delete('ShiftLeft');
+    });
+    const endStick = (e) => { if (e.pointerId !== stickId) return; stickId = null; this.touch.mx = this.touch.my = 0; stick.style.display = 'none'; this.keys.delete('ShiftLeft'); };
+    stickZone.addEventListener('pointerup', endStick); stickZone.addEventListener('pointercancel', endStick);
+
+    // look: the look zone and the fire button both steer the camera while held
+    const looks = new Map();
+    const lookStart = (e) => { looks.set(e.pointerId, { x: e.clientX, y: e.clientY }); e.currentTarget.setPointerCapture(e.pointerId); };
+    const lookMove = (e) => {
+      const l = looks.get(e.pointerId); if (!l) return;
+      this.mouse.dx += (e.clientX - l.x) * 1.4; this.mouse.dy += (e.clientY - l.y) * 1.4;
+      l.x = e.clientX; l.y = e.clientY;
+    };
+    const lookEnd = (e) => looks.delete(e.pointerId);
+    for (const el of [root.querySelector('#t-look-zone'), root.querySelector('#t-fire')]) {
+      el.addEventListener('pointerdown', lookStart); el.addEventListener('pointermove', lookMove);
+      el.addEventListener('pointerup', lookEnd); el.addEventListener('pointercancel', lookEnd);
+    }
+    const fire = root.querySelector('#t-fire');
+    fire.addEventListener('pointerdown', () => { this.mouse.left = true; this.mouse.leftPressed = true; });
+    const fireEnd = () => { this.mouse.left = false; };
+    fire.addEventListener('pointerup', fireEnd); fire.addEventListener('pointercancel', fireEnd);
+    root.querySelectorAll('[data-key]').forEach((b) => {
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.pressed.add(b.dataset.key); b.classList.add('down'); });
+      const up = () => b.classList.remove('down');
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+    });
+    const zoom = root.querySelector('#t-zoom');
+    zoom.addEventListener('pointerdown', () => { this.mouse.right = true; zoom.classList.add('down'); });
+    const zoomEnd = () => { this.mouse.right = false; zoom.classList.remove('down'); };
+    zoom.addEventListener('pointerup', zoomEnd); zoom.addEventListener('pointercancel', zoomEnd);
+    root.querySelector('#t-pause').addEventListener('pointerdown', () => onPause());
+  }
+
+  resetTouch() { this.touch.mx = this.touch.my = 0; this.mouse.left = this.mouse.right = false; this.keys.delete('ShiftLeft'); }
+
+  get canLook() { return this.locked || this.touchMode; }
+
+  lock() { if (this.touchMode) return; try { const p = this.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* denied */ } }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
   down(code) { return this.keys.has(code); }
@@ -50,5 +126,7 @@ export class Input {
     this.pressed.clear();
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
     this.mouse.leftPressed = false; this.mouse.rightPressed = false;
+    this.pan.dx = this.pan.dy = this.pan.zoom = 0;
+    this.tapped = false;
   }
 }

@@ -58,7 +58,7 @@ export class Player {
     this.alive = true;
     this.stamina = 100;
     this.reloadT = 0; this.cd = 0; this.spin = 0; this.swingT = 0; this.kickT = 0; this.kickAnim = 0;
-    this.recoil = 0; this.bob = 0; this.zoom = false;
+    this.recoil = 0; this.bob = 0; this.zoom = false; this.victory = false;
     this.rig.root.rotation.set(0, Math.PI, 0);
     this.rig.body.rotation.set(0, 0, 0);
     this.rig.root.position.y = 0;
@@ -136,7 +136,7 @@ export class Player {
     if (!this.alive) { this.updateDead(dt); this.updateCamera(dt); return; }
 
     // look
-    if (input.locked && active) {
+    if (input.canLook && active) {
       const sens = 0.0022 * input.sensitivity * (this.zoom ? 0.3 : 1);
       this.yaw -= input.mouse.dx * sens;
       this.pitch -= input.mouse.dy * sens;
@@ -150,14 +150,15 @@ export class Player {
       if (input.down('KeyS') || input.down('ArrowDown')) mz += 1;
       if (input.down('KeyA') || input.down('ArrowLeft')) mx -= 1;
       if (input.down('KeyD') || input.down('ArrowRight')) mx += 1;
+      mx += input.touch.mx; mz += input.touch.my;
     }
     const len = Math.hypot(mx, mz);
-    const moving = len > 0;
+    const moving = len > 0.15;
     let sprint = active && input.down('ShiftLeft') && moving && this.stamina > 0 && mz < 0;
     if (sprint) this.stamina = Math.max(0, this.stamina - 28 * dt); else this.stamina = Math.min(100, this.stamina + 18 * dt);
     const w = this.weapon;
     const speed = (sprint ? 8.6 : 5.4) * (w.moveMul && this.spin > 0.1 ? w.moveMul : 1) * (this.zoom ? 0.5 : 1);
-    if (moving) { mx /= len; mz /= len; }
+    if (len > 1) { mx /= len; mz /= len; }
     const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
     const wx = mx * c + mz * s, wz = -mx * s + mz * c;
     const accel = this.grounded() ? 14 : 4;
@@ -391,6 +392,14 @@ export class Player {
     r.legR.rotation.x = moving ? -Math.sin(t) * 0.8 : 0;
     if (!this.grounded()) { r.legL.rotation.x = -0.6; r.legR.rotation.x = 0.3; }
     const w = this.weapon;
+    if (this.victory) {
+      const t = performance.now() / 1000;
+      r.armR.rotation.set(-2.9 + Math.sin(t * 6) * 0.15, 0, 0.15);
+      r.armL.rotation.set(-0.2, 0, -0.1);
+      r.torso.rotation.x = -0.1; r.neck.rotation.x = -0.3;
+      r.body.position.y = Math.abs(Math.sin(t * 3)) * 0.12;
+      return;
+    }
     const aim = -Math.PI / 2 - this.pitch;
     if (w.kind === 'gun') {
       r.armR.rotation.set(aim + this.recoil * 0.3, 0, 0);

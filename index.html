@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <title>They Are Coming 3D</title>
   <meta name="description" content="Defend the orphanage. Survive the days. They are coming." />
 </head>
@@ -24,7 +27,7 @@
       <button class="btn" id="btn-help">HOW TO PLAY</button>
       <button class="btn" id="btn-settings">SETTINGS</button>
     </div>
-    <div class="menu-foot">Runs entirely in your browser. No servers were harmed.<span class="touch-note"> · Best played with keyboard &amp; mouse.</span></div>
+    <div class="menu-foot">Runs entirely in your browser. No servers were harmed.</div>
   </div>
 
   <!-- DIFFICULTY -->
@@ -103,6 +106,8 @@
     <div class="build-bottom">
       <div class="build-hint" id="build-hint">Buy defenses and place them on the street. WASD pans the map, the wheel zooms.</div>
       <div class="build-actions">
+        <button class="btn small" id="btn-rotate" style="display:none">ROTATE</button>
+        <button class="btn small danger" id="btn-cancel-place" style="display:none">CANCEL</button>
         <button class="btn small" id="btn-repair">REPAIR DEFENSES</button>
         <button class="btn small" id="btn-orph">REPAIR ORPHANAGE</button>
         <button class="btn big go" id="btn-start">START DAY ▶</button>
@@ -144,6 +149,20 @@
     <div class="pg-hint" id="pg-hint" style="display:none">PLAYGROUND · [Z] horde · [X] spawn one · [B] boss · [K] kill all · [H] god mode · [TAB] build mode</div>
     <div class="view-hint" id="view-hint">[V] switch view</div>
     <div class="lockmsg" id="lockmsg">CLICK TO FIGHT</div>
+    <div id="touch-ui">
+      <div id="t-look-zone"></div>
+      <div id="t-stick-zone"></div>
+      <div id="t-stick"><div id="t-knob"></div></div>
+      <button id="t-fire">FIRE</button>
+      <button class="tb" data-key="KeyR" id="t-reload">RELOAD</button>
+      <button class="tb" data-key="KeyF" id="t-kick">KICK</button>
+      <button class="tb" data-key="KeyG" id="t-nade">NADE</button>
+      <button class="tb" data-key="Space" id="t-jump">JUMP</button>
+      <button class="tb" data-key="KeyQ" id="t-swap">SWAP</button>
+      <button class="tb" id="t-zoom">ZOOM</button>
+      <button class="tb small" data-key="KeyV" id="t-view">VIEW</button>
+      <button class="tb small" id="t-pause">II</button>
+    </div>
   </div>
 
   <!-- DAY CLEAR -->

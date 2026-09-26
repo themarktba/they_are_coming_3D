@@ -35,7 +35,7 @@ export class Zombie {
     this.deadT = 0;
     this.detached = [];
     this.bossT = 5;
-    if (this.def.crawl) { this.rig.body.rotation.x = 1.25; this.rig.body.position.y = -0.55; }
+    if (this.def.crawl) { this.rig.body.rotation.x = 1.4; this.rig.body.position.y = 0.22; }
     this.meshes = [];
     this.root.traverse((o) => { if (o.isMesh) this.meshes.push(o); });
   }
@@ -56,9 +56,9 @@ export class Zombie {
     }
     if (this.def.crawl) {
       _v.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      out[0][0].copy(p).addScaledVector(_v, 1.1 * s).setY(0.45 * s); out[0][1] = 0.27 * s;
-      out[1][0].copy(p).addScaledVector(_v, 0.5 * s).setY(0.4 * s); out[1][1] = 0.4 * s;
-      out[2][0].copy(p).addScaledVector(_v, -0.2 * s).setY(0.25 * s); out[2][1] = 0.3 * s;
+      out[0][0].copy(p).addScaledVector(_v, 1.75 * s).setY(0.5 * s); out[0][1] = 0.28 * s;
+      out[1][0].copy(p).addScaledVector(_v, 1.15 * s).setY(0.38 * s); out[1][1] = 0.42 * s;
+      out[2][0].copy(p).addScaledVector(_v, 0.45 * s).setY(0.28 * s); out[2][1] = 0.32 * s;
       return out;
     }
     out[0][0].set(p.x, p.y + 1.83 * s, p.z); out[0][1] = 0.26 * s * (this.def.heavy ? 1.1 : 1);
@@ -146,6 +146,11 @@ export class ZombieManager {
     z.deadT = 0;
     z.fallYaw = Math.atan2(dir.x, dir.z);
     z.fallAngle = 0;
+    if (z.def.crawl) {
+      // already prone: keep lying along the crawl direction instead of tipping over
+      z.rig.body.rotation.set(0, 0, 0); z.rig.body.position.set(0, 0, 0);
+      z.fallYaw = z.yaw; z.fallAngle = Math.PI / 2;
+    }
     const force = explosive ? 9 : Math.min(7, 2 + dmg * 0.08);
     z.vel.set(dir.x * force, explosive ? 6 + Math.random() * 4 : 1.5, dir.z * force);
     if (z.def.heavy) z.vel.multiplyScalar(0.3);
@@ -464,6 +469,8 @@ export class ZombieManager {
       if (r.armR.parent) r.armR.rotation.x = -2.4 - s * 0.7;
       r.legL.rotation.x = 0.1 + s * 0.15; r.legR.rotation.x = 0.1 - s * 0.15;
       r.neck.rotation.x = -1.0;
+      r.body.rotation.z = s * 0.06;
+      r.body.position.y = 0.22 + Math.abs(s) * 0.04;
       return;
     }
     if (z.slamT > 0) {

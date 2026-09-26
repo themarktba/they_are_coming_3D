@@ -161,6 +161,7 @@ export class Game {
     this.player.spawn();
     this.player.rig.root.visible = true;
     this.world.setTime(this.diff.night ? 1 : 0.18);
+    this.blendCamera(1.4);
     this.buildCam = { x: 0, z: -12, h: 30 };
     this.world.grid.visible = true;
     this.selected = null;
@@ -186,6 +187,7 @@ export class Game {
     this.waveBreak = 1.5;
     this.waveActive = true;
     this.boss = null;
+    this.blendCamera(1.1);
     this.player.spawn();
     this.hud.show('wave');
     this.input.wantLock = true;
@@ -257,7 +259,11 @@ export class Game {
   }
 
   dayCleared() {
-    this.state = 'dayclear';
+    this.state = 'victory';
+    this.victoryT = 0; this.victoryTimeT = 0; this.fireworkT = 0.6;
+    this.victoryFromTime = this.world.timeOfDay ?? 0.8;
+    this.slowmoT = 0.9;
+    this.blendCamera(1.6);
     this.waveActive = false;
     this.input.wantLock = false; this.input.unlock();
     const bonus = Math.round((100 + this.day * 45) * this.diff.money);
@@ -268,11 +274,65 @@ export class Game {
     this.stats.earned += total;
     sfx('dayClear');
     setMusic('calm');
-    this.hud.showDayClear({ day: this.day, kills: this.dayKills, headshots: this.dayHeadshots, earned: this.dayEarn, bonus, intactBonus, total, integrity });
+    this.clearData = { day: this.day, kills: this.dayKills, headshots: this.dayHeadshots, earned: this.dayEarn, bonus, intactBonus, total, integrity };
+    this.hud.show(null);
+    this.hud.banner(`DAY ${this.day} SURVIVED`, 'The children are safe. For now.', 4.2, 'green');
+    this.player.victory = true;
     this.day++;
     const best = this.save.best[this.diff.id] || 0;
     if (this.day - 1 > best) { this.save.best[this.diff.id] = this.day - 1; }
     this.snapshotRun();
+  }
+
+  blendCamera(dur) {
+    const cam = this.world.camera;
+    this.camBlend = { pos: cam.position.clone(), quat: cam.quaternion.clone(), fov: cam.fov, t: 0, dur };
+  }
+
+  applyCameraBlend(dt) {
+    const b = this.camBlend;
+    if (!b) return;
+    b.t += dt;
+    const x = Math.min(1, b.t / b.dur), k = x * x * (3 - 2 * x);
+    const cam = this.world.camera;
+    cam.position.lerpVectors(b.pos, cam.position, k);
+    cam.quaternion.slerpQuaternions(b.quat, cam.quaternion.clone(), k);
+    cam.fov = b.fov + (cam.fov - b.fov) * k; cam.updateProjectionMatrix();
+    if (x >= 1) this.camBlend = null;
+  }
+
+  updateVictory(dt) {
+    const p = this.player, cam = this.world.camera;
+    this.victoryT += dt;
+    const t = this.victoryT;
+    // slow crane around the survivor with the orphanage behind them
+    const a = -0.5 + t * 0.09, r = 7 + Math.min(5, t * 0.8);
+    const head = new THREE.Vector3(p.pos.x, 1.6, p.pos.z);
+    cam.position.set(p.pos.x + Math.sin(a) * r, 2.2 + Math.min(4, t * 0.6), p.pos.z - Math.cos(a) * r);
+    cam.lookAt(head.x * 0.7, 2.2 + Math.min(2.5, t * 0.3), head.z + Math.min(6, t * 0.8));
+    if (Math.abs(cam.fov - 55) > 0.1) { cam.fov = 55; cam.updateProjectionMatrix(); }
+    p.viewmodel.visible = false; p.rig.root.visible = true;
+    p.updateModel(dt, 0);
+    // night lifts toward dawn (Nightmare stays dark)
+    this.victoryTimeT -= dt;
+    if (this.victoryTimeT <= 0 && !this.diff.night) {
+      this.victoryTimeT = 0.1;
+      const k = Math.min(1, t / 5);
+      this.world.setTime(this.victoryFromTime + (0.3 - this.victoryFromTime) * k * k * (3 - 2 * k));
+    }
+    this.fireworkT -= dt;
+    if (this.fireworkT <= 0 && t < 9) {
+      this.fireworkT = 0.35 + Math.random() * 0.5;
+      this.effects.firework(new THREE.Vector3((Math.random() - 0.5) * 30, 14 + Math.random() * 10, 10 + Math.random() * 14));
+      sfx('firework');
+    }
+    const skip = this.input.mouse.leftPressed || this.input.hit('Enter') || this.input.hit('Space') || this.input.tapped;
+    if (this.state === 'victory' && (t > 5.2 || (t > 1.2 && skip))) {
+      this.state = 'dayclear';
+      this.hud.showDayClear(this.clearData);
+    }
+    this.zombies.update(dt);
+    this.world.update(dt, p.pos, null);
   }
 
   gameOver(reason) {
@@ -522,6 +582,7 @@ export class Game {
 
   pause(p) {
     if (this.state !== 'wave') return;
+    this.input.resetTouch();
     this.paused = p;
     this.hud.showPause(p);
     if (p) this.input.unlock(); else this.input.lock();
@@ -542,13 +603,16 @@ export class Game {
       if (inp.down('KeyA') || inp.down('ArrowLeft')) bc.x -= pan;
       if (inp.down('KeyD') || inp.down('ArrowRight')) bc.x += pan;
     }
-    if (inp.mouse.wheel && !this.hud.overShop) bc.h = Math.max(14, Math.min(60, bc.h + inp.mouse.wheel * 3));
+    if (inp.pan.dx || inp.pan.dy) { const k = bc.h / 600; bc.x -= inp.pan.dx * k; bc.z -= inp.pan.dy * k; }
+    if (inp.pan.zoom) bc.hT = Math.max(14, Math.min(60, (bc.hT ?? bc.h) + inp.pan.zoom));
+    if (inp.mouse.wheel && !this.hud.overShop) bc.hT = Math.max(14, Math.min(60, (bc.hT ?? bc.h) + inp.mouse.wheel * 3));
+    if (bc.hT !== undefined) bc.h += (bc.hT - bc.h) * Math.min(1, dt * 8);
     bc.x = Math.max(-20, Math.min(20, bc.x)); bc.z = Math.max(-50, Math.min(4, bc.z));
     const cam = this.world.camera;
     const target = new THREE.Vector3(bc.x, 0, bc.z);
     const desired = new THREE.Vector3(bc.x, bc.h, bc.z + bc.h * 0.75);
-    cam.position.lerp(desired, Math.min(1, dt * 6));
-    cam.lookAt(target.x, 0, target.z - (cam.position.z - desired.z) * 0);
+    cam.position.copy(desired);
+    cam.lookAt(target.x, 0, target.z);
     if (Math.abs(cam.fov - 55) > 0.1) { cam.fov = 55; cam.updateProjectionMatrix(); }
     this.player.viewmodel.visible = false;
     this.player.rig.root.visible = true;
@@ -558,9 +622,9 @@ export class Game {
     if (this.placing && gp) {
       if (inp.hit('KeyR')) this.structures.ghost.rot = (this.structures.ghost.rot + 1) % 2;
       this.structures.updateGhost(gp.x, gp.z);
-      if (inp.mouse.leftPressed && !this.hud.overShop) this.tryPlace();
+      if (inp.mouse.leftPressed && (!this.hud.overShop || inp.touchMode)) this.tryPlace();
       if (inp.mouse.rightPressed || inp.hit('Escape')) this.cancelPlacing();
-    } else if (gp && inp.mouse.leftPressed && !this.hud.overShop) {
+    } else if (gp && inp.mouse.leftPressed && (!this.hud.overShop || inp.touchMode)) {
       const s = this.structures.at(gp.x, gp.z);
       this.selected = s;
       this.hud.selectStructure(s);
@@ -600,12 +664,16 @@ export class Game {
 
     if (this.state === 'menu') this.updateMenu(dt);
     else if (this.state === 'build') this.updateBuild(dt);
+    else if (this.state === 'victory' || this.state === 'dayclear') {
+      if (this.slowmoT > 0) { this.slowmoT -= dt; dt *= 0.35; }
+      this.updateVictory(dt);
+    }
     else if (this.state === 'gameover' && (this.goT = (this.goT || 0) + dt) > 3) { this.player.updateCamera(dt); this.world.update(dt, this.player.pos, null); }
-    else if (this.paused || (this.state === 'wave' && !inp.locked && !this.debugNoLock && this.player.alive)) { /* frozen until the pointer is captured */ }
+    else if (this.paused || (this.state === 'wave' && !inp.locked && !inp.touchMode && !this.debugNoLock && this.player.alive)) { /* frozen until the pointer is captured */ }
     else {
       if (this.hitStopT > 0) { this.hitStopT -= dt; dt *= 0.08; }
       if (this.slowmoT > 0) { this.slowmoT -= dt; dt *= 0.3; }
-      const active = this.state === 'wave' && (inp.locked || this.debugNoLock);
+      const active = this.state === 'wave' && (inp.locked || inp.touchMode || this.debugNoLock);
       if (this.state === 'wave' && this.mode === 'playground') { this.playgroundKeys(); if (this.state !== 'wave') { this.hud.update(dt); return; } }
       this.player.update(dt, inp, active);
       if (this.state === 'wave') this.updateDirector(dt);
@@ -613,6 +681,7 @@ export class Game {
       this.structures.update(dt);
       this.world.update(dt, this.player.pos, this.player.forward(new THREE.Vector3()));
     }
+    this.applyCameraBlend(dt);
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.5);
     this.effects.update(this.paused ? 0 : dt);
     this.hud.update(dt);
