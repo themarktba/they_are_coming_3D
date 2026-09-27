@@ -1,0 +1,28 @@
+name: Server release
+
+# Push a tag like v1.1.0 to publish release/tac3d-1.1.0.tar.gz.
+# The droplet (infra repo, services/tac3d) installs it pinned by SHA-256.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: scripts/package.sh "${GITHUB_REF_NAME#v}"
+      # never replace an existing asset: the droplet pins it by SHA-256
+      - run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then echo "release exists, leaving it alone"; exit 0; fi
+          gh release create "$GITHUB_REF_NAME" release/*.tar.gz --title "$GITHUB_REF_NAME" --notes "SHA-256: $(sha256sum release/*.tar.gz | cut -d' ' -f1)"
+        env:
+          GH_TOKEN: ${{ github.token }}

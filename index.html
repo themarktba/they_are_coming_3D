@@ -23,11 +23,36 @@
     <div class="menu-buttons">
       <button class="btn big" id="btn-continue" style="display:none">CONTINUE</button>
       <button class="btn big" id="btn-new">NEW GAME</button>
+      <button class="btn" id="btn-online">ONLINE CO-OP</button>
       <button class="btn" id="btn-playground">PLAYGROUND</button>
       <button class="btn" id="btn-help">HOW TO PLAY</button>
       <button class="btn" id="btn-settings">SETTINGS</button>
     </div>
     <div class="menu-foot">Runs entirely in your browser. No servers were harmed.</div>
+  </div>
+
+  <!-- ONLINE CO-OP -->
+  <div id="scr-online" class="screen dim">
+    <div class="panel online">
+      <h1 class="h">ONLINE CO-OP</h1>
+      <div class="set-row"><label>Your name</label><input type="text" id="net-name" maxlength="16" /></div>
+      <div class="set-row"><label>Server</label><input type="text" id="net-server" /></div>
+      <div id="net-connect" class="net-connect">
+        <button class="btn big" id="btn-net-host">HOST A GAME</button>
+        <div class="net-join"><input type="text" id="net-code" maxlength="4" placeholder="CODE" /><button class="btn" id="btn-net-join">JOIN</button></div>
+      </div>
+      <div id="net-lobby" class="net-lobby" style="display:none">
+        <div class="lobby-code">ROOM CODE <b id="lobby-code"></b></div>
+        <div class="lobby-players" id="lobby-players"></div>
+        <div id="lobby-host-opts">
+          <div class="seg" id="lobby-diff"></div>
+          <button class="btn big go" id="btn-net-start">START ▶</button>
+        </div>
+        <div id="lobby-wait" class="net-status">Waiting for the host to start…</div>
+      </div>
+      <div class="net-status" id="net-status"></div>
+      <button class="btn small" id="btn-net-back">BACK</button>
+    </div>
   </div>
 
   <!-- DIFFICULTY -->
@@ -51,24 +76,14 @@
           <p>Walkers, Runners, <b>Helmet</b> zombies (shoot the helmet off first), <b>Revivers</b> (they get back up unless you finish the head), Crawlers, <b>Bloaters</b> (they explode), Brutes. Every 5th day something much bigger shows up.</p>
         </div>
         <div>
-          <h3>CONTROLS</h3>
-          <table class="keys">
-            <tr><td>WASD</td><td>Move</td></tr>
-            <tr><td>MOUSE</td><td>Aim</td></tr>
-            <tr><td>LMB</td><td>Shoot / swing</td></tr>
-            <tr><td>RMB</td><td>Zoom (sniper)</td></tr>
-            <tr><td>R</td><td>Reload</td></tr>
-            <tr><td>F</td><td>Kick (shove them back)</td></tr>
-            <tr><td>G</td><td>Throw grenade</td></tr>
-            <tr><td>1-9 / WHEEL / Q</td><td>Switch weapon</td></tr>
-            <tr><td>SHIFT</td><td>Sprint</td></tr>
-            <tr><td>SPACE</td><td>Jump</td></tr>
-            <tr><td>V</td><td>First / third person</td></tr>
-            <tr><td>ESC / P</td><td>Pause</td></tr>
-            <tr><td>M</td><td>Mute</td></tr>
-          </table>
+          <h3>CONTROLS <small>(rebind in Settings)</small></h3>
+          <table class="keys" id="help-keys"></table>
           <h3>BUILD MODE</h3>
           <p>Click an item to buy. Structures follow your cursor: <b>click</b> to place, <b>R</b> to rotate, <b>right-click</b> to cancel, hold <b>SHIFT</b> to place several. Click a placed structure to sell it. WASD pans the map, the wheel zooms.</p>
+          <h3>LOADOUT &amp; HEALTH</h3>
+          <p>You carry <b>4 weapons</b> into a fight; click an owned weapon in the shop to equip or stash it, and upgrade your favourites. Health does <b>not</b> regenerate: heal in the shop, eat bananas, use medkits, or hire a medic.</p>
+          <h3>DEFENSES</h3>
+          <p>You walk straight through your own builds, but your bullets don't: stand on a <b>platform</b> to shoot over your barricades.</p>
         </div>
       </div>
       <button class="btn" data-back>GOT IT</button>
@@ -85,7 +100,21 @@
       <div class="set-row"><label>Sound</label><div class="seg" data-set="muted"><button data-v="false">ON</button><button data-v="true">OFF</button></div></div>
       <div class="set-row"><label>FPS counter</label><div class="seg" data-set="showFps"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
       <div class="set-row"><label>Mouse sensitivity</label><input type="range" id="sens" min="0.2" max="3" step="0.05" /><span id="sens-val"></span></div>
+      <div class="set-row"><label>Controls</label><button class="btn small" id="btn-keys">KEYBINDS…</button></div>
       <button class="btn" data-back>DONE</button>
+    </div>
+  </div>
+
+  <!-- KEYBINDS -->
+  <div id="scr-keys" class="screen dim">
+    <div class="panel keybinds">
+      <h1 class="h">KEYBINDS</h1>
+      <div class="keys-hint" id="keys-hint">Click an action, then press the new key. ESC cancels.</div>
+      <div class="keys-list" id="keys-list"></div>
+      <div class="buttons-row">
+        <button class="btn small danger" id="btn-keys-reset">RESET DEFAULTS</button>
+        <button class="btn" data-back>DONE</button>
+      </div>
     </div>
   </div>
 
@@ -96,6 +125,10 @@
       <div class="build-orph">
         <div class="lbl">ORPHANAGE</div>
         <div class="bar"><div class="fill" id="b-orph"></div></div>
+      </div>
+      <div class="build-orph build-hp">
+        <div class="lbl">YOUR HEALTH</div>
+        <div class="bar hp"><div class="fill" id="b-hp"></div><span id="b-hp-t"></span></div>
       </div>
       <div class="money" id="b-money">$0</div>
     </div>
@@ -110,6 +143,7 @@
         <button class="btn small danger" id="btn-cancel-place" style="display:none">CANCEL</button>
         <button class="btn small" id="btn-repair">REPAIR DEFENSES</button>
         <button class="btn small" id="btn-orph">REPAIR ORPHANAGE</button>
+        <button class="btn small" id="btn-heal">HEAL</button>
         <button class="btn big go" id="btn-start">START DAY ▶</button>
       </div>
     </div>
@@ -123,7 +157,7 @@
   <!-- WAVE HUD -->
   <div id="scr-wave" class="screen passthrough">
     <div class="hud-top">
-      <div class="hud-day"><div id="h-day">DAY 1</div><div id="h-wave">WAVE 1/2</div><div id="h-left"></div></div>
+      <div class="hud-day"><div id="h-day">DAY 1</div><div id="h-wave">WAVE 1/2</div><div id="h-left"></div><div class="team" id="h-team"></div></div>
       <div class="hud-orph">
         <div class="lbl">ORPHANAGE</div>
         <div class="bar"><div class="fill" id="h-orph"></div></div>
@@ -142,11 +176,12 @@
     <div class="hud-bottom-right">
       <div class="weapon-name" id="h-wname">PISTOL</div>
       <div class="ammo"><span id="h-ammo">12</span><small id="h-mag">/ ∞</small></div>
+      <div class="extras"><span id="h-heal"></span></div>
       <div class="extras"><span id="h-gren">GRENADE x1 [G]</span> <span id="h-kick">KICK [F]</span></div>
     </div>
     <div class="inv" id="h-inv"></div>
     <div class="combo" id="h-combo"></div>
-    <div class="pg-hint" id="pg-hint" style="display:none">PLAYGROUND · [Z] horde · [X] spawn one · [B] boss · [K] kill all · [H] god mode · [TAB] build mode</div>
+    <div class="pg-hint" id="pg-hint" style="display:none">PLAYGROUND · [Z] horde · [X] spawn next type · [B] next boss · [K] kill all · [H] god mode · [TAB] build mode</div>
     <div class="view-hint" id="view-hint">[V] switch view</div>
     <div class="lockmsg" id="lockmsg">CLICK TO FIGHT</div>
     <div id="touch-ui">
@@ -154,13 +189,15 @@
       <div id="t-stick-zone"></div>
       <div id="t-stick"><div id="t-knob"></div></div>
       <button id="t-fire">FIRE</button>
-      <button class="tb" data-key="KeyR" id="t-reload">RELOAD</button>
-      <button class="tb" data-key="KeyF" id="t-kick">KICK</button>
-      <button class="tb" data-key="KeyG" id="t-nade">NADE</button>
-      <button class="tb" data-key="Space" id="t-jump">JUMP</button>
-      <button class="tb" data-key="KeyQ" id="t-swap">SWAP</button>
+      <button class="tb" data-action="reload" id="t-reload">RELOAD</button>
+      <button class="tb" data-action="kick" id="t-kick">KICK</button>
+      <button class="tb" data-action="grenade" id="t-nade">NADE</button>
+      <button class="tb" data-action="jump" id="t-jump">JUMP</button>
+      <button class="tb" data-action="swap" id="t-swap">SWAP</button>
+      <button class="tb" data-action="crouch" data-toggle id="t-crouch">CROUCH</button>
       <button class="tb" id="t-zoom">ZOOM</button>
-      <button class="tb small" data-key="KeyV" id="t-view">VIEW</button>
+      <button class="tb small" data-action="banana" id="t-heal">EAT</button>
+      <button class="tb small" data-action="view" id="t-view">VIEW</button>
       <button class="tb small" id="t-pause">II</button>
     </div>
   </div>

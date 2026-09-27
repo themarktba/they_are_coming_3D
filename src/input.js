@@ -1,5 +1,14 @@
+import { DEFAULT_BINDS } from './config.js';
+
+// alternate keys that always work in addition to the user's binds
+const ALT = { forward: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+
 export class Input {
   constructor(canvas) {
+    this.binds = { ...DEFAULT_BINDS };
+    this.vdown = new Set(); // actions held by touch buttons
+    this.vpressed = new Set(); // actions tapped by touch buttons this frame
+    this.capture = null; // keybind capture callback
     this.canvas = canvas;
     this.keys = new Set();
     this.pressed = new Set();
@@ -14,6 +23,7 @@ export class Input {
 
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT')) return;
+      if (this.capture) { e.preventDefault(); const cb = this.capture; this.capture = null; cb(e.code); return; }
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
@@ -78,9 +88,9 @@ export class Input {
       const l = Math.hypot(dx, dy); if (l > R) { dx *= R / l; dy *= R / l; }
       this.touch.mx = dx / R; this.touch.my = dy / R;
       knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      if (Math.hypot(this.touch.mx, this.touch.my) > 0.92 && this.touch.my < -0.5) this.keys.add('ShiftLeft'); else this.keys.delete('ShiftLeft');
+      if (Math.hypot(this.touch.mx, this.touch.my) > 0.92 && this.touch.my < -0.5) this.vdown.add('sprint'); else this.vdown.delete('sprint');
     });
-    const endStick = (e) => { if (e.pointerId !== stickId) return; stickId = null; this.touch.mx = this.touch.my = 0; stick.style.display = 'none'; this.keys.delete('ShiftLeft'); };
+    const endStick = (e) => { if (e.pointerId !== stickId) return; stickId = null; this.touch.mx = this.touch.my = 0; stick.style.display = 'none'; this.vdown.delete('sprint'); };
     stickZone.addEventListener('pointerup', endStick); stickZone.addEventListener('pointercancel', endStick);
 
     // look: the look zone and the fire button both steer the camera while held
@@ -100,9 +110,14 @@ export class Input {
     fire.addEventListener('pointerdown', () => { this.mouse.left = true; this.mouse.leftPressed = true; });
     const fireEnd = () => { this.mouse.left = false; };
     fire.addEventListener('pointerup', fireEnd); fire.addEventListener('pointercancel', fireEnd);
-    root.querySelectorAll('[data-key]').forEach((b) => {
-      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.pressed.add(b.dataset.key); b.classList.add('down'); });
-      const up = () => b.classList.remove('down');
+    root.querySelectorAll('[data-action]').forEach((b) => {
+      const a = b.dataset.action, toggle = b.hasAttribute('data-toggle');
+      b.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        if (toggle) { const on = !this.vdown.has(a); if (on) this.vdown.add(a); else this.vdown.delete(a); b.classList.toggle('down', on); }
+        else { this.vpressed.add(a); this.vdown.add(a); b.classList.add('down'); }
+      });
+      const up = () => { if (toggle) return; this.vdown.delete(a); b.classList.remove('down'); };
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
     });
     const zoom = root.querySelector('#t-zoom');
@@ -112,7 +127,11 @@ export class Input {
     root.querySelector('#t-pause').addEventListener('pointerdown', () => onPause());
   }
 
-  resetTouch() { this.touch.mx = this.touch.my = 0; this.mouse.left = this.mouse.right = false; this.keys.delete('ShiftLeft'); }
+  resetTouch() {
+    this.touch.mx = this.touch.my = 0; this.mouse.left = this.mouse.right = false;
+    this.vdown.clear();
+    document.querySelectorAll('#touch-ui [data-toggle]').forEach((b) => b.classList.remove('down'));
+  }
 
   get canLook() { return this.locked || this.touchMode; }
 
@@ -121,9 +140,13 @@ export class Input {
 
   down(code) { return this.keys.has(code); }
   hit(code) { return this.pressed.has(code); }
+  // rebindable actions
+  act(a) { return this.keys.has(this.binds[a]) || this.vdown.has(a) || (ALT[a] && this.keys.has(ALT[a])); }
+  actHit(a) { return this.pressed.has(this.binds[a]) || this.vpressed.has(a) || (ALT[a] && this.pressed.has(ALT[a])); }
 
   endFrame() {
     this.pressed.clear();
+    this.vpressed.clear();
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
     this.mouse.leftPressed = false; this.mouse.rightPressed = false;
     this.pan.dx = this.pan.dy = this.pan.zoom = 0;

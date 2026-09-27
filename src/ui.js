@@ -1,8 +1,10 @@
-import { DIFFICULTIES, WEAPONS, STRUCTURES, ARMOR, GRENADE, ORPHANAGE_HP } from './config.js';
+import { DIFFICULTIES, WEAPONS, STRUCTURES, ARMOR, GRENADE, ORPHANAGE_HP, HEALS, PARTNERS, MAX_PARTNERS, UPGRADE, LOADOUT_SIZE, DEFAULT_BINDS, BIND_LABELS, keyLabel, weaponStats } from './config.js';
 import { sfx, initAudio, setMuted } from './audio.js';
+import { defaultServer, TEAM_COLORS } from './net.js';
 
 const $ = (id) => document.getElementById(id);
-const SCREENS = ['menu', 'diff', 'help', 'settings', 'build', 'wave', 'dayclear', 'gameover', 'pause'];
+const SCREENS = ['menu', 'online', 'diff', 'help', 'settings', 'keys', 'build', 'wave', 'dayclear', 'gameover', 'pause'];
+const OVERLAYS = ['help', 'settings', 'keys'];
 
 export class Hud {
   constructor(game) {
@@ -20,6 +22,7 @@ export class Hud {
     const g = this.game;
     const click = (id, fn) => $(id).addEventListener('click', () => { initAudio(); sfx('click'); fn(); });
     click('btn-new', () => this.show('diff'));
+    this.bindOnline();
     click('btn-continue', () => g.continueRun());
     click('btn-playground', () => g.startPlayground());
     click('btn-help', () => this.overlay('help'));
@@ -37,7 +40,7 @@ export class Hud {
     }
 
     // shop
-    const tabs = [['guns', 'GUNS'], ['melee', 'MELEE'], ['defense', 'DEFENSE'], ['gear', 'GEAR']];
+    const tabs = [['guns', 'GUNS'], ['melee', 'MELEE'], ['defense', 'BUILD'], ['allies', 'ALLIES'], ['gear', 'GEAR']];
     for (const [id, label] of tabs) {
       const b = document.createElement('button'); b.textContent = label; b.dataset.tab = id;
       b.addEventListener('click', () => { sfx('click'); this.tab = id; this.refreshShop(); });
@@ -46,13 +49,16 @@ export class Hud {
     const shop = $('shop');
     shop.addEventListener('mouseenter', () => { this.overShop = true; });
     shop.addEventListener('mouseleave', () => { this.overShop = false; });
-    for (const id of ['btn-start', 'btn-repair', 'btn-orph', 'sel-panel', 'btn-build-menu', 'btn-rotate', 'btn-cancel-place']) {
+    for (const id of ['btn-start', 'btn-repair', 'btn-orph', 'btn-heal', 'sel-panel', 'btn-build-menu', 'btn-rotate', 'btn-cancel-place']) {
       $(id).addEventListener('mouseenter', () => { this.overShop = true; });
       $(id).addEventListener('mouseleave', () => { this.overShop = false; });
     }
     click('btn-start', () => g.startDay());
     click('btn-repair', () => g.buy('repair'));
     click('btn-orph', () => g.buy('orphanage'));
+    click('btn-heal', () => g.buy('heal'));
+    click('btn-keys', () => this.overlay('keys'));
+    click('btn-keys-reset', () => { g.save.settings.binds = { ...DEFAULT_BINDS }; g.persist(); g.applySettings(); this.renderKeys(); });
     click('btn-sell', () => g.sellSelected());
     click('btn-rotate', () => { if (g.structures.ghost) { g.structures.ghost.rot = (g.structures.ghost.rot + 1) % 2; } });
     click('btn-cancel-place', () => g.cancelPlacing());
@@ -87,10 +93,55 @@ export class Hud {
     $('sens').addEventListener('input', (e) => { g.save.settings.sens = parseFloat(e.target.value); g.persist(); g.applySettings(); this.syncSettings(); });
 
     window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape') return;
+      if (e.code !== 'Escape' || g.input.capture || this.justCaptured) return;
       if (this.stack.length) this.back();
       else if ($('scr-diff').classList.contains('show')) this.show('menu');
     });
+  }
+
+  bindOnline() {
+    const g = this.game, st = g.save.settings;
+    const click = (id, fn) => $(id).addEventListener('click', () => { initAudio(); sfx('click'); fn(); });
+    const status = (msg, bad) => { $('net-status').textContent = msg; $('net-status').classList.toggle('bad', !!bad); };
+    const saveFields = () => { st.netName = $('net-name').value.trim() || 'Survivor'; st.netServer = $('net-server').value.trim() || defaultServer(); g.persist(); };
+    click('btn-online', () => {
+      $('net-name').value = st.netName || 'Survivor';
+      $('net-server').value = st.netServer || defaultServer();
+      status('Host a game and share the code, or join a friend.');
+      this.show('online');
+    });
+    this.lobbyDiff = 'normal';
+    for (const d of Object.values(DIFFICULTIES)) {
+      const b = document.createElement('button'); b.textContent = d.name; b.dataset.v = d.id;
+      b.addEventListener('click', () => { sfx('click'); this.lobbyDiff = d.id; this.updateLobby(); });
+      $('lobby-diff').appendChild(b);
+    }
+    const connect = async (fn) => {
+      saveFields(); status('Connecting…');
+      try { await fn(); status(''); } catch (e) { status(`${e.message || e}. Is the server running? (npm run server)`, true); }
+    };
+    click('btn-net-host', () => connect(() => g.netHost(st.netServer, st.netName)));
+    click('btn-net-join', () => {
+      const code = $('net-code').value.trim().toUpperCase();
+      if (code.length !== 4) { status('Enter the 4-letter room code.', true); return; }
+      connect(() => g.netJoin(st.netServer, code, st.netName));
+    });
+    $('net-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-net-join').click(); });
+    click('btn-net-start', () => { if (g.net && g.net.isHost) g.startNet(this.lobbyDiff); });
+    click('btn-net-back', () => { g.leaveNet(); this.show('menu'); });
+  }
+
+  updateLobby() {
+    const n = this.game.net;
+    $('net-connect').style.display = n ? 'none' : '';
+    $('net-lobby').style.display = n ? '' : 'none';
+    if (!n) return;
+    $('lobby-code').textContent = n.code;
+    $('lobby-players').innerHTML = [...n.names.entries()].sort((a, b) => a[0] - b[0])
+      .map(([id, name]) => `<div style="--c:#${TEAM_COLORS[id % 4].toString(16).padStart(6, '0')}">${name.toUpperCase()}${id === 0 ? ' · HOST' : ''}${id === n.id ? ' (YOU)' : ''}</div>`).join('');
+    $('lobby-host-opts').style.display = n.isHost ? '' : 'none';
+    $('lobby-wait').style.display = n.isHost ? 'none' : '';
+    $('lobby-diff').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === this.lobbyDiff));
   }
 
   syncSettings() {
@@ -108,6 +159,7 @@ export class Hud {
     if (['dayclear', 'gameover', 'menu', 'diff'].includes(name)) { $('banner').classList.remove('on'); this.bannerT = 0; }
     this.stack = [];
     for (const s of SCREENS) $('scr-' + s).classList.toggle('show', s === name);
+    this.syncOverlay();
     if (name === 'menu') {
       const g = this.game;
       if (g.save.run && g.save.run.inWave) { g.save.run = null; g.persist(); }
@@ -137,6 +189,50 @@ export class Hud {
     if (prev) $('scr-' + prev).classList.remove('show');
     $('scr-' + name).classList.add('show');
     if (name === 'settings') this.syncSettings();
+    if (name === 'keys') this.renderKeys();
+    if (name === 'help') this.renderHelpKeys();
+    this.syncOverlay();
+  }
+
+  // hide HUD/inventory behind settings & help so the panel is readable
+  syncOverlay() {
+    document.body.classList.toggle('overlay', OVERLAYS.some((s) => $('scr-' + s).classList.contains('show')));
+  }
+
+  renderKeys() {
+    const g = this.game, binds = g.save.settings.binds, list = $('keys-list');
+    const counts = {};
+    for (const c of Object.values(binds)) counts[c] = (counts[c] || 0) + 1;
+    list.innerHTML = '';
+    for (const a of Object.keys(DEFAULT_BINDS)) {
+      const l = document.createElement('div'); l.textContent = BIND_LABELS[a];
+      const b = document.createElement('button'); b.textContent = keyLabel(binds[a]);
+      if (counts[binds[a]] > 1) { b.classList.add('dup'); b.title = 'Also bound to another action'; }
+      b.addEventListener('click', () => {
+        sfx('click');
+        list.querySelectorAll('button').forEach((x) => x.classList.remove('wait'));
+        b.classList.add('wait'); b.textContent = 'PRESS A KEY';
+        g.input.capture = (code) => {
+          this.justCaptured = true; setTimeout(() => { this.justCaptured = false; }, 50);
+          if (code !== 'Escape') { binds[a] = code; g.persist(); g.applySettings(); }
+          this.renderKeys();
+        };
+      });
+      list.appendChild(l); list.appendChild(b);
+    }
+  }
+
+  renderHelpKeys() {
+    const b = this.game.save.settings.binds, k = (a) => keyLabel(b[a]);
+    const rows = [
+      [`${k('forward')}${k('left')}${k('back')}${k('right')}`, 'Move'], ['MOUSE', 'Aim'], ['LMB', 'Shoot / swing'], ['RMB', 'Zoom (scoped guns)'],
+      [k('reload'), 'Reload'], [k('kick'), 'Kick (shove them back)'], [k('grenade'), 'Throw grenade'],
+      [`${k('banana')} / ${k('medkit')}`, 'Eat banana / use medkit'],
+      [`${k('slot1')}-${k('slot4')} / WHEEL / ${k('swap')}`, 'Switch weapon'],
+      [k('sprint'), 'Sprint (you can shoot while sprinting)'], [k('jump'), 'Jump'], [k('crouch'), 'Crouch · while sprinting: slide'],
+      [k('view'), 'First / third person'], [`ESC / ${k('pause')}`, 'Pause'], [k('mute'), 'Mute'],
+    ];
+    $('help-keys').innerHTML = rows.map(([a, b2]) => `<tr><td>${a}</td><td>${b2}</td></tr>`).join('');
   }
 
   back() {
@@ -148,11 +244,13 @@ export class Hud {
     for (const s of open) $('scr-' + s).classList.remove('show');
     const prev = this.stack.pop();
     if (prev) $('scr-' + prev).classList.add('show');
+    this.game.input.capture = null;
+    this.syncOverlay();
   }
 
   showPause(p) {
     $('scr-pause').classList.toggle('show', p);
-    if (!p) { this.stack = []; $('scr-settings').classList.remove('show'); $('scr-help').classList.remove('show'); }
+    if (!p) { this.stack = []; for (const o of OVERLAYS) $('scr-' + o).classList.remove('show'); this.game.input.capture = null; this.syncOverlay(); }
   }
 
   banner(title, sub = '', dur = 2, color = '') {
@@ -214,14 +312,29 @@ export class Hud {
     $('btn-sell').textContent = `SELL +$${refund}`;
   }
 
-  item(name, price, desc, stat, state, onClick) {
+  item(name, price, desc, stat, state, onClick, { label, actions = [] } = {}) {
     const el = document.createElement('div');
     el.className = 'item ' + state;
-    const priceText = state.includes('locked') ? price : state.includes('equipped') ? 'EQUIPPED' : state.includes('owned') ? 'OWNED' : (this.game.mode === 'playground' ? 'FREE' : `$${price}`);
+    const priceText = label ?? (state.includes('locked') ? price : state.includes('equipped') ? 'EQUIPPED' : state.includes('owned') ? 'OWNED' : this.priceText(price));
     el.innerHTML = `<div class="n">${name}</div><div class="p">${priceText}</div><div class="d">${desc}</div>${stat ? `<div class="s">${stat}</div>` : ''}`;
     if (!state.includes('locked')) el.addEventListener('click', () => { initAudio(); onClick(); });
+    if (actions.length) {
+      const row = document.createElement('div'); row.className = 'acts';
+      for (const a of actions) {
+        const b = document.createElement('button');
+        b.textContent = a.label; if (a.cls) b.className = a.cls; b.disabled = !!a.disabled;
+        b.addEventListener('click', (e) => { e.stopPropagation(); initAudio(); a.onClick(); });
+        row.appendChild(b);
+      }
+      el.appendChild(row);
+    }
     $('shop-items').appendChild(el);
   }
+
+  priceText(price) { return this.game.mode === 'playground' ? 'FREE' : `$${price}`; }
+
+  note(html) { const el = document.createElement('div'); el.className = 'shop-note'; el.innerHTML = html; $('shop-items').appendChild(el); }
+  cat(text) { const el = document.createElement('div'); el.className = 'shop-cat'; el.textContent = text; $('shop-items').appendChild(el); }
 
   refreshShop() {
     const g = this.game, p = g.player;
@@ -231,20 +344,43 @@ export class Hud {
     const poor = (price) => (!g.canAfford(price) ? ' poor' : '');
     if (this.tab === 'guns' || this.tab === 'melee') {
       const kind = this.tab === 'guns' ? 'gun' : 'melee';
-      for (const [id, w] of Object.entries(WEAPONS)) {
-        if (w.kind !== kind) continue;
-        const owned = p.owned.includes(id);
-        const locked = !owned && w.day > day;
-        const state = locked ? 'locked' : owned ? (p.current === id ? 'owned equipped' : 'owned') : poor(w.price);
+      this.note(`LOADOUT <b>${p.loadout.length}/${LOADOUT_SIZE}</b>: ${p.loadout.map((id) => WEAPONS[id].name.toUpperCase()).join(' · ')}<br>Click an owned weapon to equip or stash it.`);
+      let lastCat = null;
+      const f = (x) => Math.round(x * 10) / 10;
+      for (const [id, base] of Object.entries(WEAPONS)) {
+        if (base.kind !== kind) continue;
+        if (base.cat && base.cat !== lastCat) { this.cat(base.cat); lastCat = base.cat; }
+        const lvl = p.upgrades[id] || 0, w = weaponStats(id, lvl);
+        const owned = p.owned.includes(id), carried = p.loadout.includes(id);
+        const locked = !owned && base.day > day;
+        const state = locked ? 'locked' : owned ? (carried ? 'owned equipped' : 'owned stashed') : poor(base.price);
         const stat = kind === 'gun'
-          ? `DMG ${w.dmg}${w.pellets > 1 ? 'x' + w.pellets : ''} · RATE ${w.rate}/s · MAG ${w.mag}${w.pierce ? ' · PIERCE ' + w.pierce : ''}`
-          : `DMG ${w.dmg}${w.continuous ? '/s' : ''} · REACH ${w.range}${w.dismember ? ' · DISMEMBERS' : ''}`;
-        this.item(w.name.toUpperCase(), locked ? `DAY ${w.day}` : w.price, w.desc, stat, state, () => g.buy('weapon', id));
+          ? `DMG ${f(w.dmg)}${w.pellets > 1 ? 'x' + w.pellets : ''} · RATE ${f(w.rate)}/s${w.burst ? ' (BURST)' : ''} · MAG ${w.mag}${w.pierce ? ' · PIERCE ' + w.pierce : ''}${w.explosive ? ' · EXPLOSIVE' : ''}`
+          : `DMG ${f(w.dmg)}${w.continuous ? '/s' : ''} · RATE ${f(w.rate || 10)}/s · REACH ${f(w.range)}${w.dismember ? ' · DISMEMBERS' : ''}`;
+        const actions = [];
+        if (owned) {
+          actions.push({ label: carried ? 'UNEQUIP' : 'EQUIP', cls: carried ? 'on' : '', onClick: () => g.buy('weapon', id) });
+          if (lvl < UPGRADE.max) { const c = UPGRADE.cost(base, lvl); actions.push({ label: `UPGRADE MK${lvl + 2} ${this.priceText(c)}`, cls: g.canAfford(c) ? '' : 'poor', onClick: () => g.buy('upgrade', id) }); }
+          else actions.push({ label: 'MAX UPGRADE', disabled: true, onClick: () => {} });
+        }
+        const name = base.name.toUpperCase() + (lvl ? ` <span class="mk">MK${lvl + 1}</span>` : '');
+        this.item(name, locked ? `DAY ${base.day}` : base.price, base.desc, stat, state, () => g.buy('weapon', id), { label: owned ? (carried ? 'EQUIPPED' : 'IN LOCKER') : undefined, actions });
+      }
+    } else if (this.tab === 'allies' && g.net) {
+      this.note('Allies are single-player only. In co-op, your friends are your allies!');
+    } else if (this.tab === 'allies') {
+      const hired = g.partners.alive;
+      this.note(`ALLIES <b>${hired.length}/${MAX_PARTNERS}</b> · They follow you and fight. Dead allies are gone for good; survivors are patched up each morning. Click a hired ally to dismiss (25% refund).`);
+      for (const [id, a] of Object.entries(PARTNERS)) {
+        const isHired = hired.some((h) => h.id === id);
+        const locked = !isHired && a.day > day;
+        const stat = `HP ${a.hp} · DMG ${a.dmg}${a.pellets > 1 ? 'x' + a.pellets : ''} · RATE ${a.rate}/s · RANGE ${a.range}${a.heal ? ' · HEALS' : ''}`;
+        this.item(a.name.toUpperCase(), locked ? `DAY ${a.day}` : a.price, a.desc, stat, locked ? 'locked' : isHired ? 'owned equipped' : poor(a.price), () => g.buy('partner', id), { label: isHired ? 'HIRED' : undefined });
       }
     } else if (this.tab === 'defense') {
       for (const [id, s] of Object.entries(STRUCTURES)) {
         const locked = s.day > day;
-        const stat = s.type === 'wall' ? `HP ${s.hp}` : s.type === 'tower' ? `HP ${s.hp} · DMG ${s.dmg} · RANGE ${s.range}` : id === 'claymore' ? `DMG ${s.dmg} · RADIUS ${s.radius}` : `SLOW ${Math.round(s.slow * 100)}% · ${s.dps} DPS`;
+        const stat = s.type === 'wall' ? `HP ${s.hp} · BLOCKS SHOTS` : s.type === 'platform' ? `HP ${s.hp} · HEIGHT ${s.h}m` : s.type === 'tower' ? `HP ${s.hp} · DMG ${s.dmg} · RANGE ${s.range}` : id === 'claymore' ? `DMG ${s.dmg} · RADIUS ${s.radius}` : `SLOW ${Math.round(s.slow * 100)}% · ${s.dps} DPS`;
         this.item(s.name.toUpperCase(), locked ? `DAY ${s.day}` : s.price, s.desc, stat, locked ? 'locked' : poor(s.price), () => { g.buy('structure', id); });
       }
     } else {
@@ -254,7 +390,11 @@ export class Hud {
         const locked = !owned && a.day > day;
         this.item(a.name.toUpperCase(), locked ? `DAY ${a.day}` : a.price, `Reduces damage taken by ${Math.round(a.reduce * 100)}%.`, '', locked ? 'locked' : owned ? (p.armor === i ? 'owned equipped' : 'owned') : poor(a.price), () => g.buy('armor', i));
       });
-      this.item(GRENADE.name.toUpperCase(), GRENADE.price, `Press G to throw. You have ${p.grenades}.`, `DMG ${GRENADE.dmg} · RADIUS ${GRENADE.radius}`, poor(GRENADE.price), () => g.buy('grenade'));
+      const hc = g.healCost();
+      this.item('FULL HEAL', hc, `No natural regeneration. Health ${Math.ceil(p.hp)} / ${p.maxHp}.`, '', hc ? poor(hc) : 'owned', () => g.buy('heal'), { label: hc ? undefined : 'HEALTHY' });
+      const kb = g.save.settings.binds;
+      for (const [id, h] of Object.entries(HEALS)) this.item(h.name.toUpperCase(), h.price, `${h.desc} Press ${keyLabel(kb[id])} to use. You have ${p.heals[id]}.`, '', poor(h.price), () => g.buy('consumable', id));
+      this.item(GRENADE.name.toUpperCase(), GRENADE.price, `Press ${keyLabel(kb.grenade)} to throw. You have ${p.grenades}.`, `DMG ${GRENADE.dmg} · RADIUS ${GRENADE.radius}`, poor(GRENADE.price), () => g.buy('grenade'));
       this.item('TOUGHNESS', 400, `+25 max health. Currently ${p.maxHp}.`, '', p.maxHp >= 200 ? 'owned' : poor(400), () => g.buy('hp'));
     }
     const rc = g.structures.repairCost(), oc = g.orphanageRepairCost();
@@ -262,19 +402,22 @@ export class Hud {
     $('btn-repair').disabled = !rc;
     $('btn-orph').textContent = oc ? `REPAIR ORPHANAGE $${oc}` : 'ORPHANAGE OK';
     $('btn-orph').disabled = !oc;
-    $('btn-start').textContent = g.mode === 'playground' ? 'PLAY ▶' : `START DAY ${g.day} ▶`;
+    const hc = g.healCost();
+    $('btn-heal').textContent = hc ? `HEAL ${this.priceText(hc)}` : 'HEALTH FULL';
+    $('btn-heal').disabled = !hc;
+    $('btn-start').textContent = g.mode === 'playground' ? 'PLAY ▶' : g.isClient ? 'WAITING FOR HOST' : `START DAY ${g.day} ▶`;
+    $('btn-start').disabled = g.isClient;
     $('b-day').textContent = g.mode === 'playground' ? 'PLAYGROUND' : `DAY ${g.day}`;
-    $('b-diff').textContent = g.mode === 'playground' ? 'Everything unlocked · No consequences' : `${g.diff.name} · Best: ${g.save.best[g.diff.id] || 0}`;
+    $('b-diff').textContent = g.mode === 'playground' ? 'Everything unlocked · No consequences' : g.net ? `${g.diff.name} · CO-OP ROOM ${g.net.code}` : `${g.diff.name} · Best: ${g.save.best[g.diff.id] || 0}`;
   }
 
   updateWeapons() {
-    const p = this.game.player;
+    const p = this.game.player, b = this.game.save.settings.binds;
     const inv = $('h-inv');
     if (!inv) return;
-    const ci = p.owned.indexOf(p.current);
-    const start = Math.max(0, Math.min(ci - 3, p.owned.length - 7));
-    inv.innerHTML = p.owned.slice(start, start + 7).map((id, k) => { const i = start + k; return `<div class="${id === p.current ? 'on' : ''}">${i < 9 ? `<b>${i + 1}</b>` : ''}${WEAPONS[id].name.toUpperCase()}</div>`; }).join('');
-    $('h-wname').textContent = p.weapon.name.toUpperCase();
+    inv.innerHTML = p.loadout.map((id, i) => `<div class="${id === p.current ? 'on' : ''}"><b>${keyLabel(b['slot' + (i + 1)])}</b>${WEAPONS[id].name.toUpperCase()}</div>`).join('');
+    const lvl = p.upgrades[p.current] || 0;
+    $('h-wname').textContent = p.weapon.name.toUpperCase() + (lvl ? ` MK${lvl + 1}` : '');
     this.updateAmmo();
   }
 
@@ -289,7 +432,10 @@ export class Hud {
         el.textContent = a; mag.textContent = ` / ${w.mag}`;
       }
     } else { box.className = 'ammo'; el.textContent = w.continuous ? 'VROOM' : 'MELEE'; mag.textContent = ''; }
-    $('h-gren').textContent = `GRENADE x${p.grenades} [G]`;
+    const b = this.game.save.settings.binds;
+    $('h-gren').textContent = `GRENADE x${p.grenades} [${keyLabel(b.grenade)}]`;
+    $('h-kick').textContent = `KICK [${keyLabel(b.kick)}]`;
+    $('h-heal').textContent = `BANANA x${p.heals.banana} [${keyLabel(b.banana)}]  MEDKIT x${p.heals.medkit} [${keyLabel(b.medkit)}]`;
   }
 
   showDayClear(d) {
@@ -300,6 +446,9 @@ export class Hud {
       ['Day bonus', `$${d.bonus}`], [`Orphanage intact (${Math.round(d.integrity * 100)}%)`, `$${d.intactBonus}`],
     ].map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
     $('dc-total').textContent = `+$${d.total}`;
+    const guest = this.game.isClient;
+    $('btn-next').disabled = guest;
+    $('btn-next').textContent = guest ? 'WAITING FOR HOST' : 'CONTINUE ▶';
   }
 
   showGameOver(d) {
@@ -309,6 +458,7 @@ export class Hud {
       ['Days survived', d.survived], ['Zombies killed', d.kills], ['Headshots', d.headshots],
       ['Best (' + this.game.diff.name + ')', d.best + (d.newBest ? '  NEW RECORD!' : '')],
     ].map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
+    $('btn-retry').style.display = this.game.isClient ? 'none' : '';
   }
 
   update(dt) {
@@ -321,12 +471,19 @@ export class Hud {
     if (g.state === 'build') {
       $('b-money').textContent = g.mode === 'playground' ? '$∞' : `$${g.money}`;
       $('b-orph').style.width = `${(g.orphanageHp / ORPHANAGE_HP) * 100}%`;
+      $('b-hp').style.width = `${(p.hp / p.maxHp) * 100}%`;
+      $('b-hp-t').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       if (g.selected) this.selectStructure(g.selected);
     }
     if (g.state === 'wave') {
       $('h-day').textContent = g.mode === 'playground' ? 'PLAYGROUND' : `DAY ${g.day}`;
       $('h-wave').textContent = g.mode === 'playground' ? (g.godMode ? 'GOD MODE' : '') : (g.wave ? `WAVE ${g.wave}/${g.wavesTotal}` : 'GET READY');
-      const left = g.zombies.aliveCount + (g.spawnQueue ? g.spawnQueue.length : 0);
+      const left = g.isClient ? g.netLeft || 0 : g.zombies.aliveCount + (g.spawnQueue ? g.spawnQueue.length : 0);
+      this.teamT = (this.teamT || 0) - dt;
+      if (this.teamT <= 0) {
+        this.teamT = 0.25;
+        $('h-team').innerHTML = g.net ? g.net.team().map((m) => `<div class="${m.alive ? '' : 'dead'}" style="color:#${TEAM_COLORS[m.id % 4].toString(16).padStart(6, '0')}">${m.name.toUpperCase()}${m.me ? ' (YOU)' : ''} <i><b style="width:${Math.max(0, (m.hp / m.maxHp) * 100)}%"></b></i></div>`).join('') : '';
+      }
       $('h-left').textContent = left ? `${left} ZOMBIES` : '';
       $('h-money').textContent = g.mode === 'playground' ? '$∞' : `$${g.money}`;
       $('h-earn').textContent = g.mode === 'playground' ? '' : `+$${g.dayEarn} today`;
@@ -342,12 +499,13 @@ export class Hud {
       $('h-kick').className = p.kickT > 0 ? 'cd' : '';
       if (g.boss && g.boss.state !== 'dead') {
         $('h-boss').style.display = '';
+        $('h-boss-name').textContent = g.boss.def.name;
         $('h-boss-fill').style.width = `${Math.max(0, g.boss.hp / g.boss.maxHp) * 100}%`;
       } else $('h-boss').style.display = 'none';
       const zoom = p.zoom;
       $('scope').classList.toggle('on', zoom && g.world.camera.fov < 30);
       $('crosshair').style.display = zoom ? 'none' : '';
-      const spread = p.weapon.kind === 'gun' ? p.weapon.spread * 300 + p.recoil * 10 : 0;
+      const spread = p.weapon.kind === 'gun' ? p.weapon.spread * 300 * (p.sprinting ? 1.8 : 1) * (1 - 0.4 * p.crouchK) + p.recoil * 10 : 0;
       $('crosshair').style.transform = `scale(${1 + spread * 0.08})`;
       $('lockmsg').classList.toggle('on', !g.input.locked && !g.paused && p.alive);
       if (p.reloadT > 0 && !this._wasReloading) this.updateAmmo();

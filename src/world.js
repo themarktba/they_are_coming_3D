@@ -224,7 +224,7 @@ export class World {
       if (row === 0 && Math.random() < 0.5) { const p = box(2.3, 0.25, 0.08, 0x8a5a2c, x, y + 0.3, -0.25); p.rotation.z = 0.3; g.add(p); }
     }
     for (const [x, y] of kids) { g.add(box(0.35, 0.35, 0.05, 0x10141a, x, y + 0.35, -0.2)); g.add(box(0.5, 0.5, 0.05, 0x10141a, x, y - 0.1, -0.2)); }
-    this.colliders.push({ minX: -16.3, maxX: 16.3, minZ: 13.8, maxZ: 26 });
+    this.colliders.push({ minX: -16.3, maxX: 16.3, minZ: 13.8, maxZ: 26, h: 12 });
     this.orphanage = bake(g);
 
     // yard lamps + the administrator's shop stall
@@ -238,7 +238,7 @@ export class World {
     admin.root.position.set(0, 0, 0.9); admin.root.rotation.y = Math.PI; admin.root.userData.keep = true; stall.add(admin.root);
     bake(stall);
     this.admin = admin;
-    this.colliders.push({ minX: -14, maxX: -10, minZ: 10.1, maxZ: 12.2 });
+    this.colliders.push({ minX: -14, maxX: -10, minZ: 10.1, maxZ: 12.2, h: 2.7 });
 
     // fence around the yard sides
     for (const sx of [-1, 1]) {
@@ -318,7 +318,7 @@ export class World {
       this.car(x, z, r, Math.random() < 0.5);
       const c = Math.cos(r), s = Math.sin(r);
       const hw = Math.abs(c) * 1 + Math.abs(s) * 2.1, hd = Math.abs(s) * 1 + Math.abs(c) * 2.1;
-      this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, car: true });
+      this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, h: 1.8, car: true });
     }
     for (let i = 0; i < 7; i++) this.car(rnd(-7, 7), -80 - i * 9 - rnd(0, 4), rnd(-1, 1) + (i % 2) * Math.PI / 2, Math.random() < 0.6);
     // yard lights (the only real point lights, near the orphanage)

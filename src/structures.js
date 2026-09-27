@@ -3,8 +3,21 @@ import { STRUCTURES, WORLD } from './config.js';
 import { buildStructure, box } from './models.js';
 import { sfx } from './audio.js';
 
-const CHIP = { wood: 0x8a5a2c, roadblock: 0xd6281c, sandbag: 0xc9b27f, concrete: 0xb8b8b0, steel: 0x6a6e76, wire: 0x9a9a9a, spikes: 0x9a6a38, claymore: 0x4a5a2a, sentry: 0x4a5a3a, tower: 0x7a4e24 };
-const METAL = new Set(['steel', 'roadblock', 'sentry', 'wire', 'claymore']);
+// slab test; returns entry distance, or null if missed or the origin is inside the box
+export function rayBox(o, d, x0, y0, z0, x1, y1, z1) {
+  let tmin = -Infinity, tmax = Infinity;
+  for (const [oo, dd, a, b] of [[o.x, d.x, x0, x1], [o.y, d.y, y0, y1], [o.z, d.z, z0, z1]]) {
+    if (Math.abs(dd) < 1e-9) { if (oo < a || oo > b) return null; continue; }
+    let t1 = (a - oo) / dd, t2 = (b - oo) / dd;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    if (tmin > tmax) return null;
+  }
+  return tmin > 0 ? tmin : null;
+}
+
+export const CHIP = { platform: 0x8a5a2c, scaffold: 0x7a7e86, wood: 0x8a5a2c, roadblock: 0xd6281c, sandbag: 0xc9b27f, concrete: 0xb8b8b0, steel: 0x6a6e76, wire: 0x9a9a9a, spikes: 0x9a6a38, claymore: 0x4a5a2a, sentry: 0x4a5a3a, tower: 0x7a4e24 };
+export const METAL = new Set(['steel', 'roadblock', 'sentry', 'wire', 'claymore', 'scaffold', 'concrete']);
 
 export class StructureManager {
   constructor(game) {
@@ -12,9 +25,47 @@ export class StructureManager {
     this.scene = game.world.scene;
     this.list = [];
     this.ghost = null;
+    this.uidSeq = 0;
   }
 
-  clear() { for (const s of this.list) this.scene.remove(s.obj); this.list = []; this.clearGhost(); }
+  // co-op guest: mirror the host's structures [uid, id, x, z, rot, hp]
+  applyNet(list) {
+    const byUid = new Map(this.list.map((s) => [s.uid, s]));
+    const seen = new Set();
+    for (const [uid, id, x, z, rot, hp] of list) {
+      seen.add(uid);
+      const s = byUid.get(uid) || this.place(id, x, z, rot, uid);
+      s.hp = hp;
+    }
+    for (const s of [...this.list]) if (!seen.has(s.uid)) this.destroyQuiet(s);
+  }
+
+  // health bars live in the scene separately from the model, so they must be removed too
+  clear() { for (const s of this.list) { this.scene.remove(s.obj); this.scene.remove(s.bar); } this.list = []; this.clearGhost(); }
+
+  // height you can stand on at (x, z): platform decks, else the ground
+  groundAt(x, z) {
+    let h = 0;
+    for (const s of this.list) if (s.def.type === 'platform' && x > s.minX && x < s.maxX && z > s.minZ && z < s.maxZ) h = Math.max(h, s.def.h);
+    return h;
+  }
+
+  // solid walls stop bullets and grenades; traps, towers and platforms are open frames
+  solidAt(x, y, z) {
+    for (const s of this.list) if (s.def.type === 'wall' && y < s.def.h && x > s.minX && x < s.maxX && z > s.minZ && z < s.maxZ) return s;
+    return null;
+  }
+
+  // nearest wall a ray hits before maxT: { t, s } or null. Walls you are standing inside don't count.
+  rayBlock(o, d, maxT) {
+    let best = null;
+    for (const s of this.list) {
+      if (s.def.type !== 'wall') continue;
+      const t = rayBox(o, d, s.minX, 0, s.minZ, s.maxX, s.def.h, s.maxZ);
+      if (t !== null && t < maxT && (!best || t < best.t)) best = { t, s };
+    }
+    return best;
+  }
 
   footprint(id, x, z, rot) {
     const d = STRUCTURES[id];
@@ -32,7 +83,7 @@ export class StructureManager {
     return true;
   }
 
-  place(id, x, z, rot) {
+  place(id, x, z, rot, uid) {
     const def = STRUCTURES[id];
     const obj = buildStructure(id);
     obj.position.set(x, 0, z);
@@ -43,8 +94,10 @@ export class StructureManager {
     const fg = box(1.16, 0.08, 0.06, 0x5ad85a, 0, 0, 0, { basic: true }); fg.material = fg.material.clone(); fg.castShadow = false;
     bar.add(bg); bar.add(fg); bar.position.set(x, def.h + 0.5, z); bar.visible = false;
     this.scene.add(bar);
-    const s = { id, def, obj, x, z, rot, hp: def.hp, maxHp: def.hp, dead: false, cd: 0, bar, barFg: fg, shakeT: 0, ...this.footprint(id, x, z, rot) };
+    const s = { uid: uid ?? ++this.uidSeq, id, def, obj, x, z, rot, hp: def.hp, maxHp: def.hp, dead: false, cd: 0, bar, barFg: fg, shakeT: 0, ...this.footprint(id, x, z, rot) };
     this.list.push(s);
+    if (this.game.net) this.game.net.structDirty = true;
+    this.game.effects.clearDecalsIn(s.minX, s.maxX, s.minZ, s.maxZ);
     this.game.effects.dust(new THREE.Vector3(x, 0.2, z), 10);
     sfx('place');
     return s;
@@ -141,7 +194,7 @@ export class StructureManager {
         s.barFg.material.color.setHex(frac > 0.5 ? 0x5ad85a : frac > 0.25 ? 0xffc93c : 0xff3b3b);
         s.bar.quaternion.copy(g.world.camera.quaternion);
       }
-      if (!g.waveActive) continue;
+      if (!g.waveActive || g.isClient) continue; // turrets and mines run on the co-op host only
       if (s.id === 'claymore') this.updateClaymore(s, dt);
       else if (s.def.type === 'tower') this.updateTower(s, dt);
     }

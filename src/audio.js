@@ -65,7 +65,11 @@ const GUNS = {
   tower:    (t) => { noise(t, 0.5, { freq: 3000, freqEnd: 200, vol: 0.45 }); },
 };
 
+let sfxHook = null; // co-op host records sounds for guests
+export function setSfxHook(f) { sfxHook = f; }
+
 export function sfx(name, opts = {}) {
+  if (sfxHook) sfxHook(name, opts);
   if (!ctx || muted) return;
   const t = ctx.currentTime;
   const vol = opts.vol ?? 1;
@@ -132,6 +136,9 @@ export function sfx(name, opts = {}) {
       noise(t + 0.5, 0.9, { freq: 1500, freqEnd: 200, vol: 0.5 });
       break;
     }
+    case 'scream': tone(t, 1.1, { type: 'sawtooth', freq: 900, freqEnd: 1500, vol: 0.12, attack: 0.05 }); tone(t, 1.1, { type: 'square', freq: 1320, freqEnd: 700, vol: 0.06, attack: 0.05 }); noise(t, 1.0, { type: 'highpass', freq: 2500, vol: 0.2, attack: 0.05 }); break;
+    case 'spit': if (!throttle('spit', 80)) return; noise(t, 0.2, { type: 'bandpass', freq: 600, freqEnd: 1800, q: 3, vol: 0.4 }); break;
+    case 'eat': tone(t, 0.06, { type: 'square', freq: 500, vol: 0.1 }); noise(t + 0.08, 0.08, { type: 'bandpass', freq: 1200, q: 4, vol: 0.3 }); tone(t + 0.18, 0.12, { type: 'square', freq: 900, vol: 0.1 }); break;
     case 'step': if (!throttle('step', 250)) return; noise(t, 0.05, { freq: 300, vol: 0.12 }); break;
   }
 }

@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # the Pages build is https, so it needs the droplet's wss:// co-op server
+          VITE_COOP_SERVER: wss://159-203-121-69.sslip.io/ws
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

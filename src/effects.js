@@ -58,6 +58,8 @@ export class Effects {
   constructor(scene, camera) {
     this.scene = scene; this.camera = camera;
     this.gore = true;
+    this.mute = 0; // >0: don't mirror effects to co-op guests (they replay the cause themselves)
+    this.origin = undefined; // co-op: which player caused the effects being recorded
     this.solid = new Particles(scene, 2500, new THREE.MeshLambertMaterial({ flatShading: true }));
     this.solid.mesh.castShadow = false;
     this.glow = new Particles(scene, 1500, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -70,6 +72,8 @@ export class Effects {
     this.decals.setColorAt(0, new THREE.Color());
     scene.add(this.decals);
     this.decalIdx = 0;
+    this.decalPos = new Float32Array(this.decalMax * 3); // x, z, radius per slot
+    this.isCovered = null; // (x, z) => true where a structure stands; set by the game
 
     // tracers
     this.tracerMax = 300;
@@ -97,7 +101,10 @@ export class Effects {
   }
 
   decal(x, z, size, color, rot = Math.random() * 6) {
+    // no marks on the ground under buildings (they would show through in build mode)
+    if (this.isCovered && this.isCovered(x, z)) return;
     const i = this.decalIdx++ % this.decalMax;
+    this.decalPos[i * 3] = x; this.decalPos[i * 3 + 1] = z; this.decalPos[i * 3 + 2] = size * 0.7;
     _q.setFromAxisAngle(UP, rot);
     _m.compose(_p.set(x, 0.075 + (i % 50) * 0.0006, z), _q, _s.set(size, 1, size * (0.6 + Math.random() * 0.8)));
     this.decals.setMatrixAt(i, _m);
@@ -108,6 +115,17 @@ export class Effects {
   }
 
   clearDecals() { this.decals.count = 0; this.decalIdx = 0; }
+
+  // hide marks that end up under a newly placed structure
+  clearDecalsIn(minX, maxX, minZ, maxZ) {
+    const zero = _m.makeScale(0, 0, 0);
+    let changed = false;
+    for (let i = 0; i < this.decals.count; i++) {
+      const x = this.decalPos[i * 3], z = this.decalPos[i * 3 + 1], r = this.decalPos[i * 3 + 2];
+      if (r > 0 && x + r > minX && x - r < maxX && z + r > minZ && z - r < maxZ) { this.decals.setMatrixAt(i, zero); this.decalPos[i * 3 + 2] = 0; changed = true; }
+    }
+    if (changed) this.decals.instanceMatrix.needsUpdate = true;
+  }
 
   blood(pos, dir, amount = 8, color = 0x9a0f0f) {
     if (!this.gore) { this.dust(pos, amount / 2); return; }
@@ -171,6 +189,12 @@ export class Effects {
     const ring = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffd090, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
     ring.position.set(pos.x, 0.2, pos.z); this.scene.add(ring);
     this.rings.push({ m: ring, t: 0, max: 0.45, r: radius * 1.3 });
+  }
+
+  shockwave(pos, radius, color = 0xffd090) {
+    const ring = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
+    ring.position.set(pos.x, Math.max(0.2, pos.y - 1.4), pos.z); this.scene.add(ring);
+    this.rings.push({ m: ring, t: 0, max: 0.6, r: radius });
   }
 
   firework(pos) {
