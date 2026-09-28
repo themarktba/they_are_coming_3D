@@ -25,11 +25,11 @@ npm run build      # the server also serves dist/index.html
 npm run server     # http://localhost:8787 (WebSocket on /ws)
 ```
 
-Open `http://localhost:8787`, choose **ONLINE CO-OP**, host a game and share the code. Friends on the same network use `http://<your-ip>:8787`. During `npm run dev` the game connects to `ws://localhost:8787/ws` by default; the server address can be changed on the co-op screen.
+Open `http://localhost:8787/play` (the front page `/` is intentionally a blank placeholder), choose **ONLINE CO-OP**, host a game and share the code. Friends on the same network use `http://<your-ip>:8787/play`. Set `ALLOWED_ORIGINS` (comma-separated) to restrict which pages may open co-op connections. During `npm run dev` the game connects to `ws://localhost:8787/ws` by default; the server address can be changed on the co-op screen.
 
 ### Production server
 
-The live co-op server runs at **https://159-203-121-69.sslip.io** on the shared DigitalOcean droplet, which is managed from a separate infra repo (Caddy for HTTPS with automatic Let's Encrypt certificates, this server as a systemd service on `127.0.0.1:8787`). The GitHub Pages build defaults to `wss://159-203-121-69.sslip.io/ws`.
+The live co-op server runs at **https://159-203-121-69.sslip.io** (game at `/play`; `/` is a blank placeholder page) on the shared DigitalOcean droplet, which is managed from a separate infra repo (Caddy for HTTPS with automatic Let's Encrypt certificates, this server as a systemd service on `127.0.0.1:8787`). The GitHub Pages build defaults to `wss://159-203-121-69.sslip.io/ws`.
 
 To ship a server update: bump `version` in `package.json`, push a tag `vX.Y.Z` (the *Server release* workflow publishes `tac3d-X.Y.Z.tar.gz`, built by `scripts/package.sh`), then pin and deploy it from the infra repo.
 

@@ -18,19 +18,35 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 const rooms = new Map(); // code -> { code, host, peers: Map<id, ws>, nextId }
 
+// The front page is deliberately plain and says nothing about what runs here.
+const HOME = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Welcome</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,sans-serif;color:#555;background:#fafafa}main{text-align:center}h1{font-weight:400;font-size:1.4rem;color:#333}</style>
+</head><body><main><h1>Welcome</h1><p>There is nothing to see here.</p></main></body></html>`;
+// the game page lives at an unadvertised path; set GAME_PATH to change it
+const GAME_PATH = process.env.GAME_PATH || '/play';
+// browsers send Origin on WebSocket upgrades; only the game's own pages may connect
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+const SECURITY_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY' };
+
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  if (url === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: true, rooms: rooms.size })); return; }
-  const file = path.join(DIST, 'index.html');
-  if (url !== '/' && url !== '/index.html') { res.writeHead(404); res.end('Not found'); return; }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(500); res.end('Game not built. Run `npm run build` first.'); return; }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(data);
+  const reply = (code, type, body) => { res.writeHead(code, { 'content-type': type, ...SECURITY_HEADERS }); res.end(body); };
+  if (req.method !== 'GET' && req.method !== 'HEAD') return reply(405, 'text/plain', 'Method not allowed');
+  if (url === '/') return reply(200, 'text/html; charset=utf-8', HOME);
+  if (url === '/health') return reply(200, 'application/json', '{"ok":true}');
+  if (url === '/robots.txt') return reply(200, 'text/plain', 'User-agent: *\nDisallow: /\n');
+  if (url !== GAME_PATH && url !== GAME_PATH + '/') return reply(404, 'text/plain', 'Not found');
+  fs.readFile(path.join(DIST, 'index.html'), (err, data) => {
+    if (err) return reply(500, 'text/plain', 'Not available');
+    reply(200, 'text/html; charset=utf-8', data);
   });
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024 });
+const wss = new WebSocketServer({
+  server, path: '/ws', maxPayload: 512 * 1024,
+  verifyClient: ({ origin }) => !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || ''),
+});
 
 function send(ws, obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 function newCode() {
@@ -101,4 +117,4 @@ setInterval(() => {
   for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; ws.ping(); }
 }, 15000);
 
-server.listen(PORT, HOST, () => console.log(`They Are Coming co-op server on http://${HOST}:${PORT} (ws: /ws)`));
+server.listen(PORT, HOST, () => console.log(`co-op server on http://${HOST}:${PORT} (game: ${GAME_PATH}, ws: /ws)`));

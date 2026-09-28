@@ -384,6 +384,13 @@ export class ZombieManager {
       }
       // leapers jump at you, and over your walls
       if (z.def.leap && z.leapCd <= 0 && targetPlayer && dp > 2.5 && dp < 8 && z.slow > 0.6) { this.startLeap(z, gx, gz, tgt.pos.y); continue; }
+      // bite distance: crawlers bite with their head, which lies ~1.2 m ahead of the root
+      const reach = z.radius + (z.def.boss ? 1.5 : 0.55);
+      const ax = z.def.crawl ? p.x + Math.sin(z.yaw) * 1.2 * z.scale : p.x, az = z.def.crawl ? p.z + Math.cos(z.yaw) * 1.2 * z.scale : p.z;
+      const da = tgt ? Math.hypot(tgt.pos.x - ax, tgt.pos.z - az) : Infinity;
+      const inReach = targetPlayer && da < reach + 0.35;
+      // in biting range: stop walking into them (zombies are solid and would shove)
+      if (inReach) spd = 0;
       let mx = dx * spd * dt + sx * dt * 3, mz = dz * spd * dt + sz * dt * 3;
 
       // blocking structures (walls, towers, platforms)
@@ -418,10 +425,9 @@ export class ZombieManager {
       // attacks
       z.attackT -= dt;
       let attacking = false;
-      const reach = z.radius + (z.def.boss ? 1.5 : 0.55);
       // you are out of reach up on a platform (unless it's something huge)
       const canReach = tgt && Math.abs(tgt.pos.y - p.y) < (z.def.boss ? 4 : 1.2 * z.scale);
-      if (targetPlayer && dp < reach + 0.35 && canReach) {
+      if (inReach && canReach) {
         attacking = true;
         if (z.attackT <= 0) { z.attackT = 1 / z.def.rate; g.damageTarget(tgt, z.dmg, z); }
       } else if (blocker) {
