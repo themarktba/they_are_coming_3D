@@ -11,6 +11,8 @@ cp server/index.js release/tac3d/server/
 cp dist/index.html release/tac3d/dist/
 cp -R node_modules/ws release/tac3d/node_modules/
 printf '{ "name": "tac3d-server", "version": "%s", "type": "module", "private": true }\n' "$VERSION" > release/tac3d/package.json
-COPYFILE_DISABLE=1 tar -C release -czf "release/tac3d-$VERSION.tar.gz" tac3d
+# macOS bsdtar would embed extended attributes that GNU tar on the droplet warns about
+MACFLAGS=(); tar --version 2>/dev/null | grep -q bsdtar && MACFLAGS=(--no-mac-metadata --no-xattrs)
+COPYFILE_DISABLE=1 tar "${MACFLAGS[@]}" -C release -czf "release/tac3d-$VERSION.tar.gz" tac3d
 rm -rf release/tac3d
 ( cd release && (sha256sum "tac3d-$VERSION.tar.gz" 2>/dev/null || shasum -a 256 "tac3d-$VERSION.tar.gz") )
